@@ -1,0 +1,113 @@
+/* src/styles/settings.css */
+
+.settingsPage{
+  padding-bottom: calc(var(--bottomNavH, 72px) + env(safe-area-inset-bottom) + 16px);
+}
+
+/* header row */
+.settingsHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.settingsTitle{
+  margin: 0;
+  font-size: 34px;
+  font-weight: 900;
+  color: #0b3d2e;
+}
+
+/* premium back button */
+.settingsBackBtn{
+  background: #e6f6ef;
+  border: 1px solid #b7e6d4;
+  color: #065f46;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.settingsBackBtn:hover{
+  background: #d1f0e4;
+}
+
+/* card */
+.settingsCard{
+  background: #e6f6ef;
+  border-radius: 18px;
+  padding: 14px;
+}
+
+/* rows */
+.settingsRow{
+  padding: 10px 12px;
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(11,61,46,.10);
+  border-radius: 16px;
+  margin-bottom: 10px;
+}
+
+.settingsLabel{
+  font-weight: 900;
+  opacity: .7;
+  margin-bottom: 4px;
+}
+
+.settingsValue{
+  font-weight: 900;
+  font-size: 18px;
+  color: #0b3d2e;
+}
+
+/* buttons */
+.settingsBtns{
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settingsBtn{
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 900;
+}
+
+/* logout accent */
+.logoutBtn{
+  background: #fff;
+  border: 1px solid rgba(255,90,90,.35);
+  color: #b42318;
+}
+.logoutBtn:hover{
+  background: rgba(255,90,90,.12);
+}
+
+/* not logged in */
+.settingsEmptyIcon{ font-size: 34px; text-align: center; }
+.settingsEmptyTitle{
+  margin-top: 8px;
+  text-align: center;
+  font-weight: 900;
+  font-size: 18px;
+  color: #0b3d2e;
+}
+.settingsEmptyHint{
+  margin-top: 6px;
+  text-align: center;
+  font-weight: 700;
+  opacity: .8;
+}
+.settingsCta{
+  margin-top: 12px;
+  display: inline-block;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 900;
+}

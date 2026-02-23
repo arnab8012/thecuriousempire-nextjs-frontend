@@ -1,0 +1,99 @@
+/* ===== Categories Row (Side by Side / Horizontal) ===== */
+.catRow{
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 10px 2px 4px;
+  scroll-snap-type: none;
+  -webkit-overflow-scrolling: touch;
+
+  direction: ltr;              /* ✅ ডান থেকে বামে */
+  justify-content: flex-start;
+}
+
+.catRow::-webkit-scrollbar{
+  height: 6px;
+}
+.catRow::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.15);
+  border-radius: 999px;
+}
+
+/* each category card */
+.catItem{
+  flex: 0 0 auto;
+  min-width: 160px;        /* পাশাপাশি থাকবে */
+  max-width: 180px;
+  border: none;
+  border-radius: 22px;
+  padding: 12px 12px;
+  background: #e3f5ee;
+  box-shadow: 0 10px 26px rgba(0,0,0,.08);
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  scroll-snap-align: start;
+}
+
+.catIcon{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f3f6f6;
+  flex: 0 0 auto;
+}
+
+.catIcon img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.catName{
+  font-size: 13px;
+  font-weight: 900;
+  color: #0b1220;
+  line-height: 1.2;
+}
+
+.homeSection{
+  background: #e9f7f1;   /* 💚 light green */
+  padding: 10px;
+  border-radius: 18px;
+  margin-bottom: 10px;
+}
+
+/* ✅ Bottom Options */
+.catOptions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.optionCard{
+  background: #fff1f1;
+  border-radius: 18px;
+  padding: 14px 14px;
+  font-size: 15px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 22px rgba(0,0,0,.06);
+}
+.catIcon {
+  overflow: hidden;
+}
+
+.catImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 14px; /* তোমার design অনুযায়ী */
+}

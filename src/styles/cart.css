@@ -1,0 +1,278 @@
+/* src/styles/cart.css */
+
+/* ===== page base ===== */
+.cartPage{
+  padding-bottom: calc(var(--bottomNavH, 72px) + env(safe-area-inset-bottom) + 16px);
+}
+
+.cartHead{
+  align-items: center;
+}
+
+.cartTitleH{
+  font-size: 32px;
+  font-weight: 1000;
+}
+
+/* ===== Back button (Premium) ===== */
+.cartBackBtn{
+  background: #e6f6ef;
+  border: 1px solid #b7e6d4;
+  color: #065f46;
+
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
+
+  cursor: pointer;
+  transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.10);
+}
+
+.cartBackBtn:active{
+  transform: translateY(1px);
+  filter: brightness(0.98);
+}
+
+/* ===== list ===== */
+.cartListPremium{
+  display: grid;
+  gap: 14px;
+}
+
+/* ✅ IMPORTANT: item stack context */
+.cartItemPremium{
+  position: relative;
+  isolation: isolate;
+
+  background: #e6f6ef;
+  border-radius: 18px;
+  padding: 12px;
+
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: start;
+
+  box-shadow: 0 16px 30px rgba(0,0,0,0.08);
+  border: 1px solid rgba(6,95,70,0.12);
+}
+
+/* ✅ image link (only image area) */
+.cartThumbPremium{
+  position: relative;
+  z-index: 1;
+
+  display: block;
+  width: 120px;
+  height: 92px;
+
+  border-radius: 14px;
+  overflow: hidden;
+  background: #dff3ea;
+
+  /* ✅ link area only, no overlay */
+}
+
+.cartThumbPremium img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ✅ info on top so buttons always clickable */
+.cartInfoPremium{
+  position: relative;
+  z-index: 5;
+  min-width: 0;
+}
+
+/* text */
+.cartTitleLinkPremium{
+  display: inline-block;
+  font-weight: 1000;
+  color: #0b3d2e;
+
+  text-decoration: none;
+  line-height: 1.2;
+}
+
+.cartTitleLinkPremium:active{
+  opacity: .85;
+}
+
+.cartMetaPremium{
+  margin-top: 6px;
+
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.cartPricePremium{
+  font-weight: 1000;
+  color: #0b3d2e;
+}
+
+.cartLinePremium{
+  color: #0b3d2e;
+  opacity: 0.9;
+  font-weight: 800;
+}
+
+/* actions */
+.cartActionsPremium{
+  margin-top: 10px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+
+  /* ✅ prevents overlap */
+  flex-wrap: wrap;
+}
+
+/* qty */
+.qtyBoxPremium{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qtyBtnPremium{
+  position: relative;
+  z-index: 10;
+
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+
+  background: #0f766e;
+  color: #fff;
+
+  font-size: 22px;
+  font-weight: 1000;
+
+  cursor: pointer;
+  transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+  box-shadow: 0 14px 26px rgba(0,0,0,0.12);
+
+  /* ✅ allow click always */
+  pointer-events: auto;
+}
+
+.qtyBtnPremium:active{
+  transform: scale(0.98);
+  filter: brightness(0.98);
+}
+
+.qtyNumPremium{
+  min-width: 20px;
+  text-align: center;
+  font-weight: 1000;
+  font-size: 18px;
+  color: #0b3d2e;
+}
+
+/* remove */
+.btnDangerPremium{
+  position: relative;
+  z-index: 10;
+
+  border: none;
+  background: #ff5a5a;
+  color: #fff;
+
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  font-weight: 1000;
+  cursor: pointer;
+
+  box-shadow: 0 14px 26px rgba(0,0,0,0.10);
+  transition: transform .12s ease, filter .12s ease;
+
+  pointer-events: auto;
+}
+
+.btnDangerPremium:active{
+  transform: translateY(1px);
+  filter: brightness(0.98);
+}
+
+/* summary */
+.cartSummaryPremium{
+  margin-top: 16px;
+  background: #e6f6ef;
+  border-radius: 18px;
+  padding: 14px;
+
+  box-shadow: 0 16px 30px rgba(0,0,0,0.08);
+  border: 1px solid rgba(6,95,70,0.12);
+}
+
+.sumRowPremium{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  font-size: 16px;
+  color: #0b3d2e;
+  font-weight: 900;
+}
+
+.sumBtnsPremium{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* ✅ If you use btnSoft / btnPrimary globally, keep them clickable too */
+.btnSoft,
+.btnPrimary{
+  pointer-events: auto;
+}
+
+/* mobile */
+@media (max-width: 420px){
+  .cartItemPremium{
+    grid-template-columns: 92px 1fr;
+  }
+
+  .cartThumbPremium{
+    width: 92px;
+    height: 78px;
+  }
+
+  .cartTitleH{
+    font-size: 26px;
+  }
+
+.toastAdded {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  animation: toastFade 1.2s ease forwards;
+  z-index: 10;
+}
+
+@keyframes toastFade {
+  0% { opacity: 0; transform: translateY(-6px); }
+  15% { opacity: 1; transform: translateY(0); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+}

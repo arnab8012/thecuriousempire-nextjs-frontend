@@ -1,0 +1,124 @@
+/* =========================
+   PREMIUM GLASS NAVBAR
+========================= */
+
+.topbar{
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  background: linear-gradient(
+    90deg,
+    rgba(15,95,92,0.95),
+    rgba(11,78,75,0.95)
+  );
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 8px 12px;
+}
+
+.topbarInner{
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* LOGO */
+.topBrand{
+  flex-shrink: 0;
+}
+
+.topLogo{
+  height: 40px;
+  width: auto;
+}
+
+/* =========================
+   BRAND TEXT (IMAGE STYLE)
+========================= */
+
+.brandTextWrap{
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.brandTextMain{
+  display: block;
+  font-family: "Brush Script MT", "Segoe Script", cursive;
+  font-size: 20px;
+  color: #ffe66d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* glow like image */
+  text-shadow:
+    0 0 6px rgba(255,230,109,.7),
+    0 0 12px rgba(255,230,109,.4);
+}
+
+.brandTextSub{
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =========================
+   SEARCH
+========================= */
+
+.topSearch{
+  flex-shrink: 0;
+}
+
+.topSearchBox{
+  position: relative;
+  width: 140px;
+}
+
+.topSearchInput{
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(255,255,255,.7);
+  color: #fff;
+  padding: 4px 26px 4px 0;
+  outline: none;
+  font-size: 15px;
+}
+
+.topSearchInput::placeholder{
+  color: rgba(255,255,255,.7);
+}
+
+.topSearchBtn{
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* MOBILE */
+@media (max-width: 480px){
+  .brandTextMain{
+    font-size: 17px;
+  }
+  .brandTextSub{
+    font-size: 10px;
+  }
+  .topSearchBox{
+    width: 110px;
+  }
+}

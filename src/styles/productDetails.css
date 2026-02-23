@@ -1,0 +1,85 @@
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.price {
+  font-size: 28px;
+  font-weight: 900;
+  color: #065f46;
+}
+.cut {
+  font-size: 18px;
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.qtyRow {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 14px;
+  padding: 10px;
+}
+.qtyBtn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #dcdcdc;
+  background: #f7f7f7;
+  border-radius: 12px;
+  font-size: 22px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.qtyInput {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  outline: none;
+}
+
+.pdBtns {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.btnPinkFull,
+.btnDarkFull {
+  width: 100%;
+  height: 52px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 900;
+  border: none;
+  cursor: pointer;
+}
+.btnDarkFull {
+  background: #0f766e;
+  color: #fff;
+}
+.btnPinkFull:disabled,
+.btnDarkFull:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.stockOut {
+  margin-top: 10px;
+  padding: 6px 12px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-weight: 900;
+  width: fit-content;
+}
+.product-description {
+  white-space: pre-line;
+  line-height: 1.6;
+}

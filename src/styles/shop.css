@@ -1,0 +1,74 @@
+/* =========================
+   SHOP PAGE – FINAL FIX
+========================= */
+
+/* page wrapper */
+.container{
+  padding-bottom: 110px; /* ✅ footer overlap fix */
+}
+
+/* header row */
+.shopHead{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 12px;
+}
+
+.shopTitle{
+  font-size: 22px;
+  font-weight: 900;
+  color: #0b1220;
+}
+
+.shopSub{
+  font-size: 13px;
+  opacity: .7;
+  margin-top: 4px;
+}
+
+/* back link */
+.btnSoftLink{
+  text-decoration: none;
+  font-weight: 700;
+  color: #0f5f5c;
+}
+
+/* info box */
+.softBox{
+  background: #f3f6f6;
+  padding: 16px;
+  border-radius: 14px;
+  text-align: center;
+  font-weight: 700;
+  opacity: .75;
+}
+
+/* =========================
+   PRODUCTS GRID (MAIN)
+========================= */
+
+.productsGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* ✅ mobile: 2 items */
+  gap: 14px;
+  margin: 14px 0 22px;
+  align-items: stretch;
+}
+
+@media (min-width: 768px){
+  .productsGrid{
+    grid-template-columns: repeat(4, minmax(0, 1fr)); /* desktop */
+  }
+}
+
+/* =========================
+   SEE MORE
+========================= */
+
+.shopMoreWrap{
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 6px;
+}

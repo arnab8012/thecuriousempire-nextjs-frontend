@@ -1,0 +1,110 @@
+/* ===============================
+   Bottom Navigation (Mobile)
+   =============================== */
+
+/* height control */
+:root{
+  --bottomNavH: 56px; /* ✅ চিকন height (52/56/60 যেটা চাইবে) */
+}
+
+/* main nav */
+.bottomNav{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: var(--bottomNavH);
+  background: #e9f7f1;              /* 💚 light green */
+  border-top: 1px solid #cfe9df;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+
+  z-index: 9999;
+
+  /* mobile safe area */
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+}
+
+/* each item */
+.bnItem{
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 2px;
+
+  color: #0f5f5c;
+  font-size: 11px;
+  font-weight: 500;
+
+  transition: color .2s ease, transform .2s ease;
+}
+
+/* icon */
+.bnIcon{
+  position: relative;
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* text */
+.bnTxt{
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* badge (cart / priyo count) */
+.bnBadge{
+  position: absolute;
+  top: -6px;
+  right: -10px;
+
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+
+  background: #ff4d4f;
+  color: #fff;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* active item */
+.bnItem.active{
+  color: #0b4d4a;
+  font-weight: 700;
+}
+
+/* active icon slight lift */
+.bnItem.active .bnIcon{
+  transform: translateY(-1px);
+}
+
+/* tap feedback */
+.bnItem:active{
+  transform: scale(0.96);
+}
+
+/* ===============================
+   Page content spacing
+   =============================== */
+
+/* footer / content যেন nav এর নিচে না ঢুকে */
+body{
+  padding-bottom: calc(var(--bottomNavH) + env(safe-area-inset-bottom));
+}

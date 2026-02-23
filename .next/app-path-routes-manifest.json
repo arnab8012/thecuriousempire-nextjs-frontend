@@ -1,0 +1,22 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/admin/banners/page": "/admin/banners",
+  "/admin/login/page": "/admin/login",
+  "/admin/categories/page": "/admin/categories",
+  "/admin/orders/page": "/admin/orders",
+  "/admin/page": "/admin",
+  "/admin/products/page": "/admin/products",
+  "/cart/page": "/cart",
+  "/checkout/page": "/checkout",
+  "/login/page": "/login",
+  "/page": "/",
+  "/forgot-password/page": "/forgot-password",
+  "/product/[id]/page": "/product/[id]",
+  "/priyo/page": "/priyo",
+  "/register/page": "/register",
+  "/profile/page": "/profile",
+  "/settings/edit/page": "/settings/edit",
+  "/settings/page": "/settings",
+  "/shop/page": "/shop",
+  "/favorites/page": "/favorites"
+}

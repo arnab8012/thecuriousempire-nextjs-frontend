@@ -1,0 +1,28 @@
+/* Global styles (migrated from Vite) */
+
+@import "../styles/app.css";
+@import "../styles/auth.css";
+@import "../styles/navbar.css";
+@import "../styles/footer.css";
+@import "../styles/bottom-nav.css";
+@import "../styles/mobile-menu.css";
+@import "../styles/home.css";
+@import "../styles/shop.css";
+@import "../styles/product-card.css";
+@import "../styles/productDetails.css";
+@import "../styles/cart.css";
+@import "../styles/checkout.css";
+@import "../styles/profile.css";
+@import "../styles/settings.css";
+@import "../styles/settingsEdit.css";
+@import "../styles/favorites.css";
+@import "../styles/categories.css";
+@import "../styles/PublicAuth.css";
+
+/* Admin */
+@import "../styles/admin-dashboard.css";
+@import "../styles/admin-products.css";
+@import "../styles/admin-orders.css";
+@import "../styles/admin-banners.css";
+
+/* add more imports here if you create new css */

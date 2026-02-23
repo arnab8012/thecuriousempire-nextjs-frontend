@@ -1,0 +1,131 @@
+/* ================================
+   Admin Banners – Premium UI
+   NO LOGIC CHANGE
+================================ */
+
+/* container একটু সুন্দর */
+.container {
+  max-width: 1100px;
+}
+
+/* common admin card */
+.adminCard {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #eee;
+  padding: 14px;
+  margin-top: 14px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.06);
+}
+
+/* labels */
+.lbl {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(0,0,0,.7);
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* inputs */
+.input,
+input[type="file"] {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid #ddd;
+  padding: 10px 12px;
+  outline: none;
+  background: #fff;
+}
+
+/* muted text */
+.muted {
+  font-size: 13px;
+  color: rgba(0,0,0,.55);
+}
+
+/* ================================
+   Banner thumbnail grid
+================================ */
+.bannerThumbGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .bannerThumbGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1000px) {
+  .bannerThumbGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* single banner thumb */
+.bannerThumb {
+  position: relative;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #eee;
+  box-shadow: 0 8px 18px rgba(0,0,0,.08);
+}
+
+/* banner image size control */
+.bannerThumb img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+@media (min-width: 720px) {
+  .bannerThumb img {
+    height: 200px;
+  }
+}
+
+/* ❌ remove (pending) */
+.thumbX {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  background: rgba(255,255,255,.95);
+  box-shadow: 0 8px 16px rgba(0,0,0,.15);
+}
+
+/* 🗑 delete (live) */
+.thumbBin {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  background: rgba(255,255,255,.95);
+  box-shadow: 0 8px 18px rgba(0,0,0,.18);
+}
+
+/* button feedback */
+.thumbX:active,
+.thumbBin:active {
+  transform: scale(.96);
+}
+
+/* save button spacing */
+.btnPinkFull {
+  border-radius: 999px;
+}

@@ -1,0 +1,41 @@
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;       /* 🔥 পুরো screen */
+  height: 100vh;
+  background: #fff;
+  z-index: 9999;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  padding: 20px;
+}
+
+/* drawer open হলে */
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+/* menu items */
+.mobile-drawer ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 40px;
+}
+
+.mobile-drawer li {
+  font-size: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+
+/* login button */
+.mobile-login-btn {
+  margin-top: 30px;
+  background: #ff2f80;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+}
