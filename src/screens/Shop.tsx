@@ -161,8 +161,6 @@ export default function Shop() {
     <ProductCard key={p._id} p={p} />
   ))}
 </div>
-              ))}
-            </div>
 
             {canMore ? (
               <div className="shopMoreWrap">
