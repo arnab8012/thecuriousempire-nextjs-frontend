@@ -156,9 +156,11 @@ export default function Shop() {
           </div>
         ) : (
           <>
-            <div className="productsGrid">
-              {visible.map((p) => (
-                <ProductCard key={p._id} p={p} />
+            <div className="homeTwoGrid">
+  {visible.map((p) => (
+    <ProductCard key={p._id} p={p} />
+  ))}
+</div>
               ))}
             </div>
 
