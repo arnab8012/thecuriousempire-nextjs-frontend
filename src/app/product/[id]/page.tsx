@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"; // ✅ এটা একদম উপরে
+
 import ProductDetails from "@/screens/ProductDetails";
 import type { Metadata } from "next";
 
@@ -18,7 +20,9 @@ export async function generateMetadata(
   }
 
   try {
-    const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
+    const res = await fetch(`${base}/api/products/${id}`, {
+      cache: "no-store",
+    });
 
     if (!res.ok) {
       return {
@@ -35,10 +39,10 @@ export async function generateMetadata(
       : "Product | The Curious Empire";
 
     const desc =
-      (typeof p?.description === "string" && p.description.replace(/\s+/g, " ").trim().slice(0, 180)) ||
+      (typeof p?.description === "string" &&
+        p.description.replace(/\s+/g, " ").trim().slice(0, 180)) ||
       "Premium Shopping Experience — Unique products delivered with quality & care.";
 
-    // ✅ image absolute url (social share ঠিক করার জন্য)
     const firstImg =
       (Array.isArray(p?.images) && p.images[0]) ||
       p?.image ||
@@ -46,7 +50,9 @@ export async function generateMetadata(
 
     const ogImg = String(firstImg).startsWith("http")
       ? firstImg
-      : `https://thecuriousempire.com${firstImg.startsWith("/") ? "" : "/"}${firstImg}`;
+      : `https://thecuriousempire.com${
+          firstImg.startsWith("/") ? "" : "/"
+        }${firstImg}`;
 
     const url = `https://thecuriousempire.com/product/${id}`;
 
@@ -76,6 +82,10 @@ export async function generateMetadata(
   }
 }
 
-export default function Page({ params }: { params: { id: string } }) {
+export default function Page({
+  params,
+}: {
+  params: { id: string };
+}) {
   return <ProductDetails id={params.id} />;
 }
