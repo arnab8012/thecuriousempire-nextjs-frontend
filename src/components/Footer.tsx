@@ -3,7 +3,6 @@
 import Link from "@/components/Link";
 import { useLocation } from "@/utils/useLocation";
 import { MdEmail, MdPhone } from "react-icons/md";
-import logo from "../assets/logo.png";
 
 export default function Footer() {
   const { pathname } = useLocation();
@@ -19,7 +18,7 @@ export default function Footer() {
           <div className="footerLogoWrap">
             <img
               className="footerLogo"
-              src={logo}
+              src="/logo.png"
               alt="The Curious Empire"
               loading="lazy"
               onError={(e) => {
@@ -33,13 +32,13 @@ export default function Footer() {
 
             <p className="footerDesc">
               <span>✨ Premium Shopping Experience — Unique products delivered with quality & care.</span>
-<span>🪀আপনার বিশ্বাসই আমাদের সবচেয়ে বড় শক্তি।</span>
-<span>🪀আমরা শুধু পণ্য বিক্রি করি না—</span>
-<span>🪀আমরা তৈরি করি বিশ্বাস, গুণমান এবং সন্তুষ্টির সম্পর্ক।</span>
-<span>🦋The Curious Empire বিশ্বাস করে—ভালো পণ্য শুধু প্রয়োজন নয়, এটা একটি অভিজ্ঞতা।</span>
-<span>🛒Shop Now & Feel the Difference.</span>
-<span>🚚Fast Delivery | Trusted Service</span>
-<span>💯Quality You Can Trust🏩</span>
+              <span>🪀আপনার বিশ্বাসই আমাদের সবচেয়ে বড় শক্তি।</span>
+              <span>🪀আমরা শুধু পণ্য বিক্রি করি না—</span>
+              <span>🪀আমরা তৈরি করি বিশ্বাস, গুণমান এবং সন্তুষ্টির সম্পর্ক।</span>
+              <span>🦋The Curious Empire বিশ্বাস করে—ভালো পণ্য শুধু প্রয়োজন নয়, এটা একটি অভিজ্ঞতা।</span>
+              <span>🛒Shop Now & Feel the Difference.</span>
+              <span>🚚Fast Delivery | Trusted Service</span>
+              <span>💯Quality You Can Trust🏩</span>
             </p>
 
             <div className="footerSocial">
@@ -118,19 +117,19 @@ export default function Footer() {
           </div>
         </div>
 
-<div className="footer-contact">
-  <h3>Contact Info</h3>
+        <div className="footer-contact">
+          <h3>Contact Info</h3>
 
-  <a href="mailto: thecuriousempire@gmail.com" className="contact-row">
-    <MdEmail />
-    <span>thecuriousempire@gmail.com</span>
-  </a>
+          <a href="mailto: thecuriousempire@gmail.com" className="contact-row">
+            <MdEmail />
+            <span>thecuriousempire@gmail.com</span>
+          </a>
 
-  <a href="tel:+8801799188274" className="contact-row">
-    <MdPhone />
-    <span>+8801799-188274</span>
-  </a>
-</div>
+          <a href="tel:+8801799188274" className="contact-row">
+            <MdPhone />
+            <span>+8801799-188274</span>
+          </a>
+        </div>
 
         {/* Copyright */}
         <div className="footerBottom">
@@ -146,16 +145,16 @@ export default function Footer() {
             loading="lazy"
           />
           <span className="footerDevText">
-  THIS WEBSITE DEVELOPED BY{" "}
-         <a
-    href="https://www.facebook.com/tony5232"
-         target="_blank"
-         rel="noreferrer"
-         className="devLink"
-         >
-        <strong>ARNAB CHOWDHURY (TONY)</strong>
-          </a>
-        </span>
+            THIS WEBSITE DEVELOPED BY{" "}
+            <a
+              href="https://www.facebook.com/tony5232"
+              target="_blank"
+              rel="noreferrer"
+              className="devLink"
+            >
+              <strong>ARNAB CHOWDHURY (TONY)</strong>
+            </a>
+          </span>
         </div>
       </div>
     </footer>
