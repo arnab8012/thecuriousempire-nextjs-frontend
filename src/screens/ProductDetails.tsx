@@ -5,27 +5,47 @@ import { useRouter } from "next/navigation";
 import { api } from "../api/api";
 import { useCart } from "../context/CartContext";
 
-type ProductDetailsProps = {
-  id: string;
-};
+type ProductDetailsProps = { id: string };
 
-const SITE = "https://thecuriousempire.com";
 const PROD_FALLBACK = "https://api.thecuriousempire.com";
+const SITE_FALLBACK = "https://thecuriousempire.com";
 
 function pickApiBaseClient() {
   const raw =
     process.env.NEXT_PUBLIC_API_BASE ||
     process.env.NEXT_PUBLIC_API_URL ||
     (process.env.NODE_ENV === "production" ? PROD_FALLBACK : "http://localhost:5000");
-
   return String(raw || "").replace(/\/+$/, "");
 }
 
-// ✅ IMPORTANT: images often live on API domain (not SITE domain)
-function absImg(url: any) {
+function s(v: any, fb = "") {
+  if (v == null) return fb;
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // object/array → safe stringify-ish
+  try {
+    if (typeof v?.toString === "function" && v.toString !== Object.prototype.toString) return String(v);
+  } catch {}
+  return fb;
+}
+
+function num(v: any, fb = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fb;
+}
+
+// ✅ supports images as string OR {url} OR {src}
+function normalizeImage(x: any): string {
   const base = pickApiBaseClient();
-  const u = String(url || "").trim();
-  if (!u) return `${SITE}/logo.png`;
+  const raw =
+    typeof x === "string"
+      ? x
+      : typeof x === "object" && x
+      ? (x.url || x.src || x.path || "")
+      : "";
+
+  const u = String(raw || "").trim();
+  if (!u) return `${SITE_FALLBACK}/logo.png`;
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
   if (u.startsWith("/")) return `${base}${u}`;
   return `${base}/${u}`;
@@ -51,23 +71,22 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
       try {
         setErr("");
         const r = await api.get(`/api/products/${id}`);
-
         if (!alive) return;
 
         if (r?.ok && r?.product) {
           setP(r.product);
-          const firstVar = r.product?.variants?.[0]?.name || "";
+          const firstVar = s(r.product?.variants?.[0]?.name, "");
           setVariant(firstVar);
           setQty(1);
           setIdx(0);
         } else {
           setP(null);
-          setErr(r?.message || "Product not found");
+          setErr(s(r?.message, "Product not found"));
         }
       } catch (e: any) {
         if (!alive) return;
         setP(null);
-        setErr(e?.message || "Network/API error");
+        setErr(s(e?.message, "Network/API error"));
       }
     })();
 
@@ -76,12 +95,13 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
   const imgs = useMemo(() => {
     const arr = Array.isArray(p?.images) ? p.images : [];
-    const cleaned = arr.filter(Boolean).map(absImg);
-    if (!cleaned.length && p?.image) return [absImg(p.image)];
-    return cleaned;
+    const list = arr.map(normalizeImage).filter(Boolean);
+    if (list.length) return list;
+
+    const single = p?.image ? normalizeImage(p.image) : "";
+    return single ? [single] : [`${SITE_FALLBACK}/logo.png`];
   }, [p?.images, p?.image]);
 
-  // auto slider
   useEffect(() => {
     if (imgs.length <= 1) return;
     const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
@@ -100,7 +120,6 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
       <div className="container" style={{ padding: 16 }}>
         <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>Product load failed</div>
         <div className="muted" style={{ marginBottom: 12 }}>{err}</div>
-
         <button className="btnDarkFull" type="button" onClick={() => router.push("/shop")}>
           Back to Shop
         </button>
@@ -110,19 +129,32 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
   if (!p) return <div className="container">Loading...</div>;
 
-  const mainImg = imgs[idx] || `${SITE}/logo.png`;
+  const title = s(p?.title, "Product");
+  const price = num(p?.price, 0);
+  const compareAt = p?.compareAtPrice ? num(p.compareAtPrice, 0) : 0;
 
-  const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
-  const availableStock = selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0;
+  const mainImg = imgs[idx] || `${SITE_FALLBACK}/logo.png`;
+
+  const variants = Array.isArray(p?.variants) ? p.variants : [];
+  const safeVariantNames = variants.map((v: any) => s(v?.name, "")).filter(Boolean);
+
+  // variant pick fallback
+  useEffect(() => {
+    if (!variant && safeVariantNames.length) setVariant(safeVariantNames[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeVariantNames.length]);
+
+  const selectedVar = variants.find((v: any) => s(v?.name, "") === variant);
+  const availableStock = num(selectedVar?.stock ?? variants?.[0]?.stock, 0);
   const canBuy = availableStock > 0 && qty <= availableStock;
 
   const cartItem = {
-    productId: p._id,
-    title: p.title,
+    productId: s(p?._id, ""),
+    title,
     image: imgs[0] || mainImg,
     variant,
     qty,
-    price: p.price,
+    price,
   };
 
   const prev = () => imgs.length && setIdx((x) => (x - 1 + imgs.length) % imgs.length);
@@ -137,9 +169,9 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <img
               className="pdImg"
               src={mainImg}
-              alt={p.title}
+              alt={title}
               style={{ width: "100%", borderRadius: 14 }}
-              onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE}/logo.png`)}
+              onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE_FALLBACK}/logo.png`)}
             />
 
             {imgs.length > 1 && (
@@ -213,7 +245,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
                     width="78"
                     height="60"
                     style={{ objectFit: "cover", borderRadius: 10 }}
-                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE}/logo.png`)}
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE_FALLBACK}/logo.png`)}
                   />
                 </button>
               ))}
@@ -242,24 +274,27 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             </div>
           ) : null}
 
-          <h2>{p.title}</h2>
+          <h2>{title}</h2>
 
           <div className="priceRow">
-            <span className="price">৳ {p.price}</span>
-            {p.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
+            <span className="price">৳ {price}</span>
+            {compareAt ? <span className="cut">৳ {compareAt}</span> : null}
           </div>
 
-          <div className="muted">Delivery time: {p.deliveryDays}</div>
+          <div className="muted">Delivery time: {s(p?.deliveryDays, "")}</div>
 
-          {p.variants?.length ? (
+          {safeVariantNames.length ? (
             <div className="box">
               <div className="lbl">Available variant:</div>
               <select value={variant} onChange={(e) => setVariant(e.target.value)} className="input">
-                {p.variants.map((v: any, i: number) => (
-                  <option key={i} value={v.name}>
-                    {v.name} (Stock: {v.stock})
-                  </option>
-                ))}
+                {safeVariantNames.map((name: string, i: number) => {
+                  const v = variants.find((x: any) => s(x?.name, "") === name);
+                  return (
+                    <option key={i} value={name}>
+                      {name} (Stock: {num(v?.stock, 0)})
+                    </option>
+                  );
+                })}
               </select>
             </div>
           ) : null}
@@ -275,7 +310,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
               <input
                 className="qtyInput"
                 value={qty}
-                onChange={(e) => setQty(Math.max(1, Number((e.target as HTMLInputElement).value || 1)))}
+                onChange={(e) => setQty(Math.max(1, num((e.target as HTMLInputElement).value, 1)))}
                 inputMode="numeric"
                 type="number"
                 min="1"
@@ -313,11 +348,15 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             >
               Buy Now
             </button>
+
+            {availableStock <= 0 ? (
+              <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>Stock Out</div>
+            ) : null}
           </div>
 
           <div className="box">
             <h4>Description</h4>
-            <p className="product-description muted">{p.description || "No description yet."}</p>
+            <p className="product-description muted">{s(p?.description, "No description yet.")}</p>
           </div>
         </div>
       </div>
