@@ -1,102 +1,115 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "@/utils/useParams";
-import { useNavigate } from "@/utils/useNavigate";
-import { api } from "../api/api";
-import { useCart } from "../context/CartContext";
+import { useParams, useRouter } from "next/navigation";
+import { api } from "@/api/api";
+import { useCart } from "@/context/CartContext";
+
+type Variant = {
+  name: string;
+  stock?: number;
+};
+
+type Product = {
+  _id: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  compareAtPrice?: number;
+  deliveryDays?: string;
+  images?: string[];
+  image?: string;
+  variants?: Variant[];
+};
 
 export default function ProductDetails({ id: idProp }: { id?: string }) {
-  const { id: idFromUrl } = useParams();
+  const params = useParams<{ id?: string }>();
+  const router = useRouter();
+
+  const idFromUrl = typeof params?.id === "string" ? params.id : "";
   const id = idProp || idFromUrl;
 
-  const nav = useNavigate();
   const { add, buyNow } = useCart();
 
-  const [p, setP] = useState<any>(null);
-  const [variant, setVariant] = useState("");
-  const [qty, setQty] = useState(1);
+  const [p, setP] = useState<Product | null>(null);
+  const [variant, setVariant] = useState<string>("");
+  const [qty, setQty] = useState<number>(1);
 
-  const [idx, setIdx] = useState(0);
-  const [toast, setToast] = useState("");
-
-  // ✅ NEW: error state (ক্র্যাশ না করে message দেখাবে)
+  const [idx, setIdx] = useState<number>(0);
+  const [toast, setToast] = useState<string>("");
   const [err, setErr] = useState<string>("");
 
+  // load product
   useEffect(() => {
     let alive = true;
-
-    if (!id) return () => (alive = false);
+    if (!id) return () => void (alive = false);
 
     (async () => {
       try {
         setErr("");
-        const r = await api.get(`/api/products/${id}`);
+        setP(null);
 
+        const r: any = await api.get(`/api/products/${id}`);
         if (!alive) return;
 
-        if (r?.ok) {
-          setP(r.product);
-          const firstVar = r.product?.variants?.[0]?.name || "";
-          setVariant(firstVar);
-          setQty(1);
-          setIdx(0);
-        } else {
-          setP(null);
+        // backend might return {ok, product} or direct product
+        const product: Product | null = r?.ok ? r?.product : (r?.product ?? r ?? null);
+
+        if (r?.ok === false) {
           setErr(r?.message || "Product not found");
+          setP(null);
+          return;
         }
+
+        if (!product || !product._id) {
+          setErr("Product not found");
+          setP(null);
+          return;
+        }
+
+        setP(product);
+
+        const firstVar = product?.variants?.[0]?.name || "";
+        setVariant(firstVar);
+        setQty(1);
+        setIdx(0);
       } catch (e: any) {
         if (!alive) return;
+        setErr(e?.message ? `Network/API error: ${e.message}` : "Network/API error (product load failed)");
         setP(null);
-        setErr("Network/API error (product load failed)");
       }
     })();
 
-    return () => (alive = false);
+    return () => void (alive = false);
   }, [id]);
 
   const imgs = useMemo(() => {
-    const arr = Array.isArray(p?.images) ? p.images : [];
+    const arr = Array.isArray(p?.images) ? p!.images! : [];
     return arr.filter(Boolean);
   }, [p?.images]);
 
+  // auto slider
   useEffect(() => {
     if (imgs.length <= 1) return;
-    const t = setInterval(() => {
-      setIdx((x) => (x + 1) % imgs.length);
-    }, 2500);
+    const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
     return () => clearInterval(t);
   }, [imgs.length]);
 
-  // ✅ error দেখাবে, কিন্তু app crash করবে না
-  if (err) {
-    return (
-      <div className="container" style={{ padding: 16 }}>
-        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>
-          Product load failed
-        </div>
-        <div className="muted" style={{ marginBottom: 12 }}>
-          {err}
-        </div>
-        <button className="btnDarkFull" type="button" onClick={() => nav("/shop")}>
-          Back to Shop
-        </button>
-      </div>
-    );
-  }
-
-  if (!p) return <div className="container">Loading...</div>;
-
-  const mainImg = imgs[idx] || "https://via.placeholder.com/800x500?text=Product";
-
-  const cartItem = {
-    productId: p._id,
-    title: p.title,
-    image: imgs[0] || mainImg,
-    variant,
-    qty,
-    price: p.price,
+  const showToast = (msg: string) => {
+    setToast(msg);
+    const w = window as any;
+    if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
+    w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
   };
+
+  const selectedVar = (p?.variants || []).find((v) => v.name === variant);
+  const availableStock = (selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0) as number;
+  const canBuy = availableStock > 0 && qty <= availableStock;
+
+  const mainImg =
+    imgs[idx] ||
+    p?.image ||
+    "https://via.placeholder.com/800x500?text=Product";
 
   const prev = () => {
     if (!imgs.length) return;
@@ -108,16 +121,33 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
     setIdx((x) => (x + 1) % imgs.length);
   };
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    const w = window as any;
-    if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
-    w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
-  };
+  // UI states
+  if (err) {
+    return (
+      <div className="container" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>
+          Product load failed
+        </div>
+        <div className="muted" style={{ marginBottom: 12 }}>
+          {err}
+        </div>
+        <button className="btnDarkFull" type="button" onClick={() => router.push("/shop")}>
+          Back to Shop
+        </button>
+      </div>
+    );
+  }
 
-  const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
-  const availableStock = selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0;
-  const canBuy = availableStock > 0 && qty <= availableStock;
+  if (!p) return <div className="container">Loading...</div>;
+
+  const cartItem = {
+    productId: p._id,
+    title: p.title || "Product",
+    image: imgs[0] || mainImg,
+    variant,
+    qty,
+    price: p.price || 0,
+  };
 
   return (
     <div className="container">
@@ -128,7 +158,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
             <img
               className="pdImg"
               src={mainImg}
-              alt={p.title}
+              alt={p.title || "Product"}
               style={{ width: "100%", borderRadius: 14 }}
             />
 
@@ -192,7 +222,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                   gap: 8,
                 }}
               >
-                {imgs.map((_: any, i: number) => (
+                {imgs.map((_, i) => (
                   <button
                     key={i}
                     type="button"
@@ -222,7 +252,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                 paddingBottom: 6,
               }}
             >
-              {imgs.map((url: string, i: number) => (
+              {imgs.map((url, i) => (
                 <button
                   key={i}
                   type="button"
@@ -239,8 +269,8 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                   <img
                     src={url}
                     alt=""
-                    width="78"
-                    height="60"
+                    width={78}
+                    height={60}
                     style={{ objectFit: "cover", borderRadius: 10 }}
                   />
                 </button>
@@ -273,19 +303,27 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
           <h2>{p.title}</h2>
 
           <div className="priceRow">
-            <span className="price">৳ {p.price}</span>
+            <span className="price">৳ {p.price ?? 0}</span>
             {p.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
           </div>
 
-          <div className="muted">Delivery time: {p.deliveryDays}</div>
+          <div className="muted">Delivery time: {p.deliveryDays || "3-5 days"}</div>
 
           {p.variants?.length ? (
             <div className="box">
               <div className="lbl">Available variant:</div>
-              <select value={variant} onChange={(e) => setVariant(e.target.value)} className="input">
-                {p.variants.map((v: any, i: number) => (
+              <select
+                value={variant}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setVariant(v);
+                  setQty(1);
+                }}
+                className="input"
+              >
+                {p.variants.map((v, i) => (
                   <option key={i} value={v.name}>
-                    {v.name} (Stock: {v.stock})
+                    {v.name} (Stock: {v.stock ?? 0})
                   </option>
                 ))}
               </select>
@@ -308,7 +346,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                 className="qtyInput"
                 value={qty}
                 onChange={(e) => {
-                  const n = Math.max(1, Number((e.target as HTMLInputElement).value || 1));
+                  const n = Math.max(1, Number(e.target.value || 1));
                   if (availableStock > 0 && n > availableStock) {
                     setQty(availableStock);
                     showToast(`Only ${availableStock} in stock`);
@@ -318,7 +356,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                 }}
                 inputMode="numeric"
                 type="number"
-                min="1"
+                min={1}
               />
 
               <button
@@ -365,7 +403,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                   return;
                 }
                 buyNow(p, variant, qty);
-                nav("/checkout?mode=buy");
+                router.push("/checkout?mode=buy");
               }}
               type="button"
               disabled={!canBuy}
