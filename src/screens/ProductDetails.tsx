@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "@/utils/useParams";
-import { useNavigate } from "@/utils/useNavigate";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "../api/api";
 import { useCart } from "../context/CartContext";
 
@@ -63,10 +62,13 @@ function upsertJsonLd(id: string, obj: any) {
 }
 
 export default function ProductDetails({ id: idProp, initialProduct }: ProductDetailsProps) {
-  const { id: idFromUrl } = useParams();
+  const router = useRouter();
+  const params = useParams();
+
+  // Next.js useParams returns Record<string, string | string[]>
+  const idFromUrl = (params?.id as string) || "";
   const id = idProp || idFromUrl;
 
-  const nav = useNavigate();
   const { add, buyNow } = useCart();
 
   const [p, setP] = useState<any>(initialProduct ?? null);
@@ -202,7 +204,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
         <div className="muted" style={{ marginBottom: 12 }}>
           {err}
         </div>
-        <button className="btnDarkFull" type="button" onClick={() => nav("/shop")}>
+        <button className="btnDarkFull" type="button" onClick={() => router.push("/shop")}>
           Back to Shop
         </button>
       </div>
@@ -466,7 +468,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
                   return;
                 }
                 buyNow(p, variant, qty);
-                nav("/checkout?mode=buy");
+                router.push("/checkout?mode=buy");
               }}
               type="button"
               disabled={!canBuy}
