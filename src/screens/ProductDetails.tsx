@@ -1,17 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "@/utils/useParams";
-import { useNavigate } from "@/utils/useNavigate";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "../api/api";
 import { useCart } from "../context/CartContext";
-import { Helmet } from "react-helmet-async";
 
 export default function ProductDetails({ id: idProp }: { id?: string }) {
-  const { id: idFromUrl } = useParams();
-  const id = idProp || idFromUrl;
+  const params = useParams<{ id: string }>();
+  const id = idProp || params?.id;
 
-  const nav = useNavigate();
+  const router = useRouter();
   const { add, buyNow } = useCart();
 
   const [p, setP] = useState<any>(null);
@@ -72,7 +70,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
     image: imgs[0] || mainImg,
     variant,
     qty,
-    price: p.price
+    price: p.price,
   };
 
   const prev = () => {
@@ -87,89 +85,18 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
 
   const showToast = (msg: string) => {
     setToast(msg);
-    // একাধিক click করলে আগের timeout cancel
     const w = window as any;
     if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
     w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
   };
 
-  // =========================
-  // ✅ SEO (Helmet) values
-  // =========================
-  const canonical = p?._id
-    ? `https://thecuriousempire.com/product/${p._id}`
-    : `https://thecuriousempire.com/product/${id}`;
-
-  const title = p?.title ? `${p.title} | The Curious Empire` : "Product | The Curious Empire";
-
-  const descRaw =
-    p?.description ||
-    "Shop premium products at The Curious Empire. Quality products with fast delivery.";
-
-  // ✅ description ছোট (Google snippet friendly)
-  const desc = String(descRaw).replace(/\s+/g, " ").trim().slice(0, 180);
-
-  const ogImg = imgs[0] || "https://thecuriousempire.com/og.png";
-
   // ✅ variant-based stock
   const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
-  const inStock = (selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0) > 0;
   const availableStock = selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0;
   const canBuy = availableStock > 0 && qty <= availableStock;
 
-  const price = Number(p?.price || 0);
-  const brandName = "The Curious Empire";
-
-  // ✅ Product JSON-LD schema
-  const productSchema = p?._id
-    ? {
-        "@context": "https://schema.org",
-        "@type": "Product",
-        name: p.title,
-        image: (imgs?.length ? imgs : [ogImg]).filter(Boolean),
-        description: desc,
-        sku: String(p._id),
-        brand: { "@type": "Brand", name: brandName },
-        offers: {
-          "@type": "Offer",
-          url: canonical,
-          priceCurrency: "BDT",
-          price: price || undefined,
-          availability: inStock
-            ? "https://schema.org/InStock"
-            : "https://schema.org/OutOfStock",
-          itemCondition: "https://schema.org/NewCondition"
-        }
-      }
-    : null;
-
   return (
     <>
-      {/* ✅ SEO HEAD TAGS */}
-      <Helmet>
-        <title>{title}</title>
-        <meta name="description" content={desc} />
-        <link rel="canonical" href={canonical} />
-
-        {/* Open Graph */}
-        <meta property="og:title" content={title} />
-        <meta property="og:description" content={desc} />
-        <meta property="og:type" content="product" />
-        <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={ogImg} />
-
-        {/* Twitter */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={title} />
-        <meta name="twitter:description" content={desc} />
-        <meta name="twitter:image" content={ogImg} />
-
-        {/* JSON-LD Product Schema */}
-        {productSchema && (
-          <script type="application/ld+json">{JSON.stringify(productSchema)}</script>
-        )}
-      </Helmet>
-
       <div className="container">
         <div className="pd">
           {/* ✅ LEFT: Gallery */}
@@ -200,7 +127,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                       cursor: "pointer",
                       background: "rgba(0,0,0,0.45)",
                       color: "#fff",
-                      fontSize: 20
+                      fontSize: 20,
                     }}
                     aria-label="Previous image"
                   >
@@ -222,7 +149,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                       cursor: "pointer",
                       background: "rgba(0,0,0,0.45)",
                       color: "#fff",
-                      fontSize: 20
+                      fontSize: 20,
                     }}
                     aria-label="Next image"
                   >
@@ -241,7 +168,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                     bottom: 10,
                     display: "flex",
                     justifyContent: "center",
-                    gap: 8
+                    gap: 8,
                   }}
                 >
                   {imgs.map((_: any, i: number) => (
@@ -255,7 +182,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                         borderRadius: 999,
                         border: "none",
                         cursor: "pointer",
-                        background: i === idx ? "#111" : "rgba(0,0,0,0.25)"
+                        background: i === idx ? "#111" : "rgba(0,0,0,0.25)",
                       }}
                       aria-label={`img-${i}`}
                     />
@@ -272,7 +199,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                   gap: 10,
                   marginTop: 12,
                   overflowX: "auto",
-                  paddingBottom: 6
+                  paddingBottom: 6,
                 }}
               >
                 {imgs.map((url: string, i: number) => (
@@ -286,7 +213,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                       padding: 2,
                       background: "#fff",
                       cursor: "pointer",
-                      flex: "0 0 auto"
+                      flex: "0 0 auto",
                     }}
                     title={`Image ${i + 1}`}
                     aria-label={`Thumbnail ${i + 1}`}
@@ -319,7 +246,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                   borderRadius: 12,
                   width: "fit-content",
                   fontWeight: 800,
-                  marginBottom: 10
+                  marginBottom: 10,
                 }}
               >
                 ✓ {toast}
@@ -403,7 +330,6 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
             </div>
 
             <div className="pdBtns">
-              {/* ✅ Add to Cart => cart এ add হবে, কিন্তু /cart এ যাবে না */}
               <button
                 className="btnPinkFull"
                 onClick={() => {
@@ -420,7 +346,6 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                 Add to Cart
               </button>
 
-              {/* ✅ Buy Now => cart এ add হবে না */}
               <button
                 className="btnDarkFull"
                 onClick={() => {
@@ -429,7 +354,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                     return;
                   }
                   buyNow(p, variant, qty);
-                  nav("/checkout?mode=buy");
+                  router.push("/checkout?mode=buy");
                 }}
                 type="button"
                 disabled={!canBuy}
@@ -444,9 +369,7 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
 
             <div className="box">
               <h4>Description</h4>
-              <p className="product-description muted">
-                {p.description || "No description yet."}
-              </p>
+              <p className="product-description muted">{p.description || "No description yet."}</p>
             </div>
           </div>
         </div>
