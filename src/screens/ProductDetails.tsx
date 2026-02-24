@@ -11,6 +11,57 @@ type ProductDetailsProps = {
   initialProduct?: any;
 };
 
+const SITE = "https://thecuriousempire.com";
+
+function cleanText(v: any) {
+  return String(v ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function absUrl(url: string) {
+  const u = String(url || "");
+  if (!u) return `${SITE}/logo.png`;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${SITE}${u}`;
+  return `${SITE}/${u}`;
+}
+
+function upsertMeta(selector: string, attrs: Record<string, string>) {
+  if (typeof document === "undefined") return;
+  let el = document.querySelector(selector) as HTMLMetaElement | null;
+  if (!el) {
+    el = document.createElement("meta");
+    Object.entries(attrs).forEach(([k, v]) => el!.setAttribute(k, v));
+    document.head.appendChild(el);
+  } else {
+    Object.entries(attrs).forEach(([k, v]) => el!.setAttribute(k, v));
+  }
+}
+
+function upsertLink(rel: string, href: string) {
+  if (typeof document === "undefined") return;
+  let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
+  if (!el) {
+    el = document.createElement("link");
+    el.setAttribute("rel", rel);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("href", href);
+}
+
+function upsertJsonLd(id: string, obj: any) {
+  if (typeof document === "undefined") return;
+  let el = document.getElementById(id) as HTMLScriptElement | null;
+  if (!el) {
+    el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.id = id;
+    document.head.appendChild(el);
+  }
+  el.text = JSON.stringify(obj);
+}
+
 export default function ProductDetails({ id: idProp, initialProduct }: ProductDetailsProps) {
   const { id: idFromUrl } = useParams();
   const id = idProp || idFromUrl;
@@ -53,7 +104,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
           setQty(1);
           setIdx(0);
         } else {
-          // initialProduct থাকলে hard-fail দেখাবো না
           if (!initialProduct) {
             setP(null);
             setErr(r?.message || "Product not found");
@@ -83,14 +133,75 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     return () => clearInterval(t);
   }, [imgs.length]);
 
+  // ✅ Client-side SEO + JSON-LD (browser)
+  useEffect(() => {
+    if (!p?._id) return;
+
+    const canonical = `${SITE}/product/${p._id}`;
+    const title = p?.title ? `${cleanText(p.title)} | The Curious Empire` : "Product | The Curious Empire";
+
+    const desc =
+      cleanText(p?.description) ||
+      cleanText(p?.title) ||
+      "Premium Shopping Experience — Unique products delivered with quality & care.";
+    const description = desc.slice(0, 180);
+
+    const ogImg = absUrl((Array.isArray(p?.images) && p.images[0]) || p?.image || "/logo.png");
+
+    // title + canonical
+    document.title = title;
+    upsertLink("canonical", canonical);
+
+    // basic meta
+    upsertMeta('meta[name="description"]', { name: "description", content: description });
+
+    // OG
+    upsertMeta('meta[property="og:title"]', { property: "og:title", content: title });
+    upsertMeta('meta[property="og:description"]', { property: "og:description", content: description });
+    upsertMeta('meta[property="og:url"]', { property: "og:url", content: canonical });
+    upsertMeta('meta[property="og:type"]', { property: "og:type", content: "product" });
+    upsertMeta('meta[property="og:image"]', { property: "og:image", content: ogImg });
+
+    // Twitter
+    upsertMeta('meta[name="twitter:card"]', { name: "twitter:card", content: "summary_large_image" });
+    upsertMeta('meta[name="twitter:title"]', { name: "twitter:title", content: title });
+    upsertMeta('meta[name="twitter:description"]', { name: "twitter:description", content: description });
+    upsertMeta('meta[name="twitter:image"]', { name: "twitter:image", content: ogImg });
+
+    // ✅ JSON-LD schema
+    const price = Number(p?.price);
+    const hasStock = Array.isArray(p?.variants) ? p.variants.some((v: any) => Number(v?.stock) > 0) : true;
+    const availability = hasStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock";
+
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: cleanText(p?.title),
+      image: imgs.length ? imgs.map(absUrl) : [absUrl("/logo.png")],
+      description: description,
+      sku: String(p?._id || ""),
+      brand: { "@type": "Brand", name: "The Curious Empire" },
+      offers: {
+        "@type": "Offer",
+        url: canonical,
+        priceCurrency: "BDT",
+        price: Number.isFinite(price) ? String(price) : "0",
+        availability,
+        itemCondition: "https://schema.org/NewCondition",
+      },
+    };
+
+    upsertJsonLd("tce-product-jsonld", jsonLd);
+  }, [p?._id, p?.title, p?.description, p?.price, imgs.length]);
+
   // ✅ error show (no crash)
   if (err) {
     return (
       <div className="container" style={{ padding: 16 }}>
-        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>
-          Product load failed
+        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>Product load failed</div>
+        <div className="muted" style={{ marginBottom: 12 }}>
+          {err}
         </div>
-        <div className="muted" style={{ marginBottom: 12 }}>{err}</div>
         <button className="btnDarkFull" type="button" onClick={() => nav("/shop")}>
           Back to Shop
         </button>
@@ -138,12 +249,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
         {/* LEFT: Gallery */}
         <div>
           <div style={{ position: "relative" }}>
-            <img
-              className="pdImg"
-              src={mainImg}
-              alt={p.title}
-              style={{ width: "100%", borderRadius: 14 }}
-            />
+            <img className="pdImg" src={mainImg} alt={p.title} style={{ width: "100%", borderRadius: 14 }} />
 
             {imgs.length > 1 && (
               <>
@@ -226,15 +332,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
           </div>
 
           {imgs.length > 1 && (
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 12,
-                overflowX: "auto",
-                paddingBottom: 6,
-              }}
-            >
+            <div style={{ display: "flex", gap: 10, marginTop: 12, overflowX: "auto", paddingBottom: 6 }}>
               {imgs.map((url: string, i: number) => (
                 <button
                   key={i}
@@ -249,13 +347,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
                     flex: "0 0 auto",
                   }}
                 >
-                  <img
-                    src={url}
-                    alt=""
-                    width="78"
-                    height="60"
-                    style={{ objectFit: "cover", borderRadius: 10 }}
-                  />
+                  <img src={url} alt="" width="78" height="60" style={{ objectFit: "cover", borderRadius: 10 }} />
                 </button>
               ))}
             </div>
@@ -309,11 +401,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
             <div className="lbl">Quantity</div>
 
             <div className="qtyRow">
-              <button
-                className="qtyBtn"
-                onClick={() => setQty((q) => Math.max(1, q - 1))}
-                type="button"
-              >
+              <button className="qtyBtn" onClick={() => setQty((q) => Math.max(1, q - 1))} type="button">
                 −
               </button>
 
