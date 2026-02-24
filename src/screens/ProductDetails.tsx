@@ -6,8 +6,7 @@ import { api } from "../api/api";
 import { useCart } from "../context/CartContext";
 
 type ProductDetailsProps = {
-  id?: string;
-  initialProduct?: any;
+  id: string;
 };
 
 const SITE = "https://thecuriousempire.com";
@@ -22,30 +21,28 @@ function pickApiBaseClient() {
   return String(raw || "").replace(/\/+$/, "");
 }
 
+// ✅ IMPORTANT: images often live on API domain (not SITE domain)
 function absImg(url: any) {
   const base = pickApiBaseClient();
   const u = String(url || "").trim();
   if (!u) return `${SITE}/logo.png`;
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
-
-  // ✅ images usually live on API host
   if (u.startsWith("/")) return `${base}${u}`;
   return `${base}/${u}`;
 }
 
-export default function ProductDetails({ id, initialProduct }: ProductDetailsProps) {
+export default function ProductDetails({ id }: ProductDetailsProps) {
   const router = useRouter();
   const { add, buyNow } = useCart();
 
-  const [p, setP] = useState<any>(initialProduct ?? null);
+  const [p, setP] = useState<any>(null);
   const [variant, setVariant] = useState("");
   const [qty, setQty] = useState(1);
-
   const [idx, setIdx] = useState(0);
-  const [toast, setToast] = useState("");
-  const [err, setErr] = useState<string>("");
 
-  // fetch product
+  const [toast, setToast] = useState("");
+  const [err, setErr] = useState("");
+
   useEffect(() => {
     let alive = true;
     if (!id) return () => (alive = false);
@@ -60,33 +57,31 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
         if (r?.ok && r?.product) {
           setP(r.product);
           const firstVar = r.product?.variants?.[0]?.name || "";
-          setVariant((v: string) => v || firstVar);
+          setVariant(firstVar);
           setQty(1);
           setIdx(0);
         } else {
           setP(null);
           setErr(r?.message || "Product not found");
         }
-      } catch {
+      } catch (e: any) {
         if (!alive) return;
         setP(null);
-        setErr("Network/API error (product load failed)");
+        setErr(e?.message || "Network/API error");
       }
     })();
 
     return () => (alive = false);
   }, [id]);
 
-  // ✅ images normalized (absolute)
   const imgs = useMemo(() => {
     const arr = Array.isArray(p?.images) ? p.images : [];
     const cleaned = arr.filter(Boolean).map(absImg);
-    // fallback: single image field
     if (!cleaned.length && p?.image) return [absImg(p.image)];
     return cleaned;
   }, [p?.images, p?.image]);
 
-  // slider
+  // auto slider
   useEffect(() => {
     if (imgs.length <= 1) return;
     const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
@@ -105,6 +100,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
       <div className="container" style={{ padding: 16 }}>
         <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>Product load failed</div>
         <div className="muted" style={{ marginBottom: 12 }}>{err}</div>
+
         <button className="btnDarkFull" type="button" onClick={() => router.push("/shop")}>
           Back to Shop
         </button>
@@ -114,7 +110,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
 
   if (!p) return <div className="container">Loading...</div>;
 
-  const mainImg = imgs[idx] || absImg("/logo.png");
+  const mainImg = imgs[idx] || `${SITE}/logo.png`;
 
   const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
   const availableStock = selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0;
@@ -129,20 +125,13 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
     price: p.price,
   };
 
-  const prev = () => {
-    if (!imgs.length) return;
-    setIdx((x) => (x - 1 + imgs.length) % imgs.length);
-  };
-
-  const next = () => {
-    if (!imgs.length) return;
-    setIdx((x) => (x + 1) % imgs.length);
-  };
+  const prev = () => imgs.length && setIdx((x) => (x - 1 + imgs.length) % imgs.length);
+  const next = () => imgs.length && setIdx((x) => (x + 1) % imgs.length);
 
   return (
     <div className="container">
       <div className="pd">
-        {/* LEFT: Gallery */}
+        {/* LEFT */}
         <div>
           <div style={{ position: "relative" }}>
             <img
@@ -150,9 +139,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
               src={mainImg}
               alt={p.title}
               style={{ width: "100%", borderRadius: 14 }}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = `${SITE}/logo.png`;
-              }}
+              onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE}/logo.png`)}
             />
 
             {imgs.length > 1 && (
@@ -202,37 +189,6 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
                 </button>
               </>
             )}
-
-            {imgs.length > 1 && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 10,
-                  display: "flex",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                {imgs.map((_: any, i: number) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setIdx(i)}
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 999,
-                      border: "none",
-                      cursor: "pointer",
-                      background: i === idx ? "#111" : "rgba(0,0,0,0.25)",
-                    }}
-                    aria-label={`img-${i}`}
-                  />
-                ))}
-              </div>
-            )}
           </div>
 
           {imgs.length > 1 && (
@@ -257,9 +213,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
                     width="78"
                     height="60"
                     style={{ objectFit: "cover", borderRadius: 10 }}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = `${SITE}/logo.png`;
-                    }}
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE}/logo.png`)}
                   />
                 </button>
               ))}
@@ -267,7 +221,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
           )}
         </div>
 
-        {/* RIGHT: Details */}
+        {/* RIGHT */}
         <div className="pdRight" style={{ position: "relative" }}>
           {toast ? (
             <div
@@ -321,34 +275,13 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
               <input
                 className="qtyInput"
                 value={qty}
-                onChange={(e) => {
-                  const n = Math.max(1, Number((e.target as HTMLInputElement).value || 1));
-                  if (availableStock > 0 && n > availableStock) {
-                    setQty(availableStock);
-                    showToast(`Only ${availableStock} in stock`);
-                    return;
-                  }
-                  setQty(n);
-                }}
+                onChange={(e) => setQty(Math.max(1, Number((e.target as HTMLInputElement).value || 1)))}
                 inputMode="numeric"
                 type="number"
                 min="1"
               />
 
-              <button
-                className="qtyBtn"
-                onClick={() =>
-                  setQty((q) => {
-                    const nextQty = q + 1;
-                    if (availableStock > 0 && nextQty > availableStock) {
-                      showToast(`Only ${availableStock} in stock`);
-                      return q;
-                    }
-                    return nextQty;
-                  })
-                }
-                type="button"
-              >
+              <button className="qtyBtn" onClick={() => setQty((q) => q + 1)} type="button">
                 +
               </button>
             </div>
@@ -358,10 +291,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
             <button
               className="btnPinkFull"
               onClick={() => {
-                if (!canBuy) {
-                  showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
-                  return;
-                }
+                if (!canBuy) return showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
                 add(cartItem);
                 showToast("Added to cart");
               }}
@@ -374,10 +304,7 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
             <button
               className="btnDarkFull"
               onClick={() => {
-                if (!canBuy) {
-                  showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
-                  return;
-                }
+                if (!canBuy) return showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
                 buyNow(p, variant, qty);
                 router.push("/checkout?mode=buy");
               }}
@@ -386,10 +313,6 @@ export default function ProductDetails({ id, initialProduct }: ProductDetailsPro
             >
               Buy Now
             </button>
-
-            {availableStock <= 0 ? (
-              <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>Stock Out</div>
-            ) : null}
           </div>
 
           <div className="box">
