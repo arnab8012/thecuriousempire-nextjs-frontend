@@ -1,8 +1,4 @@
-// src/app/robots.ts
 import type { MetadataRoute } from "next";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 const SITE = "https://thecuriousempire.com";
 
@@ -11,20 +7,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
-        disallow: [
-          "/admin",
-          "/admin/",
-          "/api",
-          "/api/",
-          "/_next/",
-          "/checkout",
-          "/checkout/",
-          "/profile",
-          "/profile/",
-          "/settings",
-          "/settings/",
-        ],
+        allow: ["/"],
+        disallow: ["/admin", "/admin/", "/api/"],
       },
     ],
     sitemap: `${SITE}/sitemap.xml`,
