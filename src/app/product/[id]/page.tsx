@@ -1,3 +1,4 @@
+// src/app/product/[id]/page.tsx
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -7,12 +8,30 @@ import ProductDetails from "@/screens/ProductDetails";
 const SITE = "https://thecuriousempire.com";
 
 function pickBaseUrl() {
-  const raw =
+  const base =
+    process.env.API_BASE ||
     process.env.NEXT_PUBLIC_API_BASE ||
     process.env.NEXT_PUBLIC_API_URL ||
-    process.env.API_BASE ||
     "";
-  return String(raw).replace(/\/+$/, "");
+  return String(base).replace(/\/+$/, "");
+}
+
+function cleanText(x: any) {
+  return String(x || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchProductServer(id: string) {
+  const base = pickBaseUrl();
+  if (!base) return null;
+
+  const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  return data?.product ?? data ?? null;
 }
 
 export async function generateMetadata(
@@ -20,7 +39,6 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const id = params.id;
   const canonical = `${SITE}/product/${id}`;
-  const base = pickBaseUrl();
 
   const fallback: Metadata = {
     title: "Product | The Curious Empire",
@@ -30,8 +48,15 @@ export async function generateMetadata(
       title: "Product | The Curious Empire",
       description: "Premium Shopping Experience — Unique products delivered with quality & care.",
       url: canonical,
-      type: "website", // ✅ product না (এটা crash করতে পারে)
-      images: [{ url: `${SITE}/logo.png` }],
+      type: "product",
+      siteName: "The Curious Empire",
+      images: [
+        {
+          url: `${SITE}/logo.png`,
+          secureUrl: `${SITE}/logo.png`,
+          alt: "The Curious Empire",
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
@@ -41,18 +66,18 @@ export async function generateMetadata(
     },
   };
 
-  if (!base) return fallback;
-
   try {
-    const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
-    if (!res.ok) return fallback;
+    const p = await fetchProductServer(id);
+    if (!p) return fallback;
 
-    const data = await res.json();
-    const p = data?.product ?? data;
+    const title = p?.title
+      ? `${p.title} | The Curious Empire`
+      : (fallback.title as string);
 
-    const title = p?.title ? `${p.title} | The Curious Empire` : String(fallback.title);
-    const descRaw = typeof p?.description === "string" ? p.description : fallback.description!;
-    const description = String(descRaw).replace(/\s+/g, " ").trim().slice(0, 180);
+    const description =
+      cleanText(p?.description) ||
+      "Premium Shopping Experience — Unique products delivered with quality & care.";
+    const desc = description.slice(0, 180);
 
     const img0 =
       (Array.isArray(p?.images) && p.images[0]) ||
@@ -65,20 +90,33 @@ export async function generateMetadata(
 
     return {
       title,
-      description,
+      description: desc,
       alternates: { canonical },
       openGraph: {
         title,
-        description,
+        description: desc,
         url: canonical,
-        type: "website",
-        images: [{ url: ogImage }],
+        type: "product",
+        siteName: "The Curious Empire",
+        images: [
+          {
+            url: ogImage,
+            secureUrl: ogImage,
+            alt: p?.title ? String(p.title) : "The Curious Empire Product",
+          },
+        ],
       },
       twitter: {
         card: "summary_large_image",
         title,
-        description,
+        description: desc,
         images: [ogImage],
+      },
+      // Extra WhatsApp/Facebook help (Next will render common OG anyway)
+      other: {
+        "og:image:secure_url": ogImage,
+        "og:image:alt": p?.title ? String(p.title) : "Product image",
+        "og:site_name": "The Curious Empire",
       },
     };
   } catch {
@@ -86,6 +124,60 @@ export async function generateMetadata(
   }
 }
 
-export default function Page({ params }: { params: { id: string } }) {
-  return <ProductDetails id={params.id} />;
+export default async function Page({ params }: { params: { id: string } }) {
+  const id = params.id;
+  const canonical = `${SITE}/product/${id}`;
+
+  const p = await fetchProductServer(id);
+
+  // Schema.org Product JSON-LD (Google rich results)
+  const images: string[] =
+    (Array.isArray(p?.images) ? p.images : [])
+      .filter(Boolean)
+      .map((x: any) =>
+        String(x).startsWith("http")
+          ? String(x)
+          : `${SITE}${String(x).startsWith("/") ? "" : "/"}${x}`
+      );
+
+  const price = Number(p?.price || 0);
+  const availability =
+    p?.stock > 0 || (Array.isArray(p?.variants) && p.variants.some((v: any) => (v?.stock ?? 0) > 0))
+      ? "https://schema.org/InStock"
+      : "https://schema.org/OutOfStock";
+
+  const jsonLd = p
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: cleanText(p?.title),
+        image: images.length ? images : [`${SITE}/logo.png`],
+        description: cleanText(p?.description) || cleanText(p?.title),
+        sku: String(p?._id || ""),
+        brand: { "@type": "Brand", name: "The Curious Empire" },
+        offers: {
+          "@type": "Offer",
+          url: canonical,
+          priceCurrency: "BDT",
+          price: isFinite(price) ? String(price) : "0",
+          availability,
+          itemCondition: "https://schema.org/NewCondition",
+        },
+      }
+    : null;
+
+  return (
+    <>
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      ) : null}
+
+      {/* Client component */}
+      <ProductDetails id={id} initialProduct={p || undefined} />
+    </>
+  );
 }
