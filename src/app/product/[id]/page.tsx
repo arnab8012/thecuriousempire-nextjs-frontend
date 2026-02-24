@@ -7,8 +7,8 @@ import type { Metadata } from "next";
 export async function generateMetadata(
   { params }: { params: { id: string } }
 ): Promise<Metadata> {
-  const id = params.id;
-  const url = `https://thecuriousempire.com/product/${id}`;
+
+  const url = `https://thecuriousempire.com/product/${params.id}`;
 
   return {
     title: "Product | The Curious Empire",
