@@ -1,169 +1,169 @@
-export const runtime = "nodejs";
+"use client";
 
-import type { Metadata } from "next";
-import dynamicImport from "next/dynamic";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-// ✅ Client-only ProductDetails (prevents SSR issues)
-const ProductDetails = dynamicImport(() => import("@/screens/ProductDetails"), {
-  ssr: false,
-});
+const CartContext = createContext(null);
 
-const SITE = "https://thecuriousempire.com";
-const PROD_FALLBACK = "https://api.thecuriousempire.com";
+const CART_KEY = "cart_items_v1";
+const BUY_KEY = "buy_now_item_v1";
 
-function pickApiBase() {
-  const raw =
-    process.env.NEXT_PUBLIC_API_BASE ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    process.env.API_BASE ||
-    (process.env.NODE_ENV === "production" ? PROD_FALLBACK : "http://localhost:5000");
-
-  return String(raw || "").replace(/\/+$/, "");
-}
-
-function cleanText(x: any) {
-  return String(x || "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function toAbsImageUrl(img: any) {
-  const s = String(img || "");
-  if (!s) return `${SITE}/logo.png`;
-  if (s.startsWith("http://") || s.startsWith("https://")) return s;
-  // if backend returns "/uploads/..." or "uploads/..."
-  return `${SITE}${s.startsWith("/") ? "" : "/"}${s}`;
-}
-
-export async function generateMetadata(
-  { params }: { params: { id: string } }
-): Promise<Metadata> {
-  const id = params.id;
-  const canonical = `${SITE}/product/${id}`;
-  const base = pickApiBase();
-
-  const fallback: Metadata = {
-    title: "Product | The Curious Empire",
-    description: "Premium Shopping Experience — Unique products delivered with quality & care.",
-    alternates: { canonical },
-    openGraph: {
-      title: "Product | The Curious Empire",
-      description: "Premium Shopping Experience — Unique products delivered with quality & care.",
-      url: canonical,
-      type: "website",
-      images: [{ url: `${SITE}/logo.png` }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "Product | The Curious Empire",
-      description: "Premium Shopping Experience — Unique products delivered with quality & care.",
-      images: [`${SITE}/logo.png`],
-    },
-  };
-
+function safeJsonParse(text, fallback) {
   try {
-    const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
-    if (!res.ok) return fallback;
-
-    const data = await res.json();
-    const p = data?.product;
-
-    if (!p) return fallback;
-
-    const titleBase = p?.title ? cleanText(p.title) : "Product";
-    const title = `${titleBase} | The Curious Empire`;
-
-    const description = cleanText(p?.description || p?.title || fallback.description).slice(0, 180);
-
-    const img0 =
-      (Array.isArray(p?.images) && p.images[0]) ||
-      p?.image ||
-      `${SITE}/logo.png`;
-
-    const ogImage = toAbsImageUrl(img0);
-
-    return {
-      title,
-      description,
-      alternates: { canonical },
-      openGraph: {
-        title,
-        description,
-        url: canonical,
-        type: "product",
-        images: [{ url: ogImage }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title,
-        description,
-        images: [ogImage],
-      },
-    };
+    return JSON.parse(text);
   } catch {
     return fallback;
   }
 }
 
-export default async function Page({ params }: { params: { id: string } }) {
-  const id = params.id;
-  const base = pickApiBase();
-  const canonical = `${SITE}/product/${id}`;
+function loadFromStorage(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return fallback;
+  return safeJsonParse(raw, fallback);
+}
 
-  let p: any = null;
+function saveToStorage(key, value) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
 
-  try {
-    const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      p = data?.product || null;
-    }
-  } catch {
-    // ignore (we will render safe UI)
-  }
+export function CartProvider({ children }) {
+  // ✅ start empty, then load after mount (avoids client crash)
+  const [items, setItems] = useState([]);
+  const [checkoutItem, setCheckoutItem] = useState(null);
 
-  // ✅ Schema.org Product JSON-LD (Google rich results)
-  const images = Array.isArray(p?.images) ? p.images.filter(Boolean).map(toAbsImageUrl) : [];
-  const price = Number(p?.price || 0);
+  // ✅ load once on mount
+  useEffect(() => {
+    const loadedItems = loadFromStorage(CART_KEY, []);
+    setItems(Array.isArray(loadedItems) ? loadedItems : []);
 
-  const availability =
-    (p?.variants || []).some((v: any) => (v?.stock ?? 0) > 0)
-      ? "https://schema.org/InStock"
-      : "https://schema.org/OutOfStock";
+    const loadedBuy = loadFromStorage(BUY_KEY, null);
+    setCheckoutItem(loadedBuy || null);
+  }, []);
 
-  const jsonLd =
-    p
-      ? {
-          "@context": "https://schema.org",
-          "@type": "Product",
-          name: cleanText(p?.title),
-          image: images.length ? images : [`${SITE}/logo.png`],
-          description: cleanText(p?.description || p?.title),
-          sku: String(p?._id || ""),
-          brand: { "@type": "Brand", name: "The Curious Empire" },
-          offers: {
-            "@type": "Offer",
-            url: canonical,
-            priceCurrency: "BDT",
-            price: Number.isFinite(price) ? String(price) : "0",
-            availability,
-            itemCondition: "https://schema.org/NewCondition",
-          },
-        }
-      : null;
+  // ✅ persist cart
+  useEffect(() => {
+    saveToStorage(CART_KEY, items);
+  }, [items]);
 
-  return (
-    <>
-      {jsonLd ? (
-        <script
-          type="application/ld+json"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      ) : null}
+  // ---------- CART ----------
+  const add = (item) => {
+    setItems((prev) => {
+      const i = prev.findIndex(
+        (x) =>
+          x.productId === item.productId &&
+          String(x.variant || "") === String(item.variant || "")
+      );
 
-      {/* ✅ Render client component safely */}
-      <ProductDetails id={id} initialProduct={p || undefined} />
-    </>
+      if (i >= 0) {
+        return prev.map((x, idx) =>
+          idx === i
+            ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) }
+            : x
+        );
+      }
+      return [...prev, { ...item, qty: Number(item.qty || 1) }];
+    });
+  };
+
+  const inc = (productId, variant = "") => {
+    setItems((prev) =>
+      prev.map((x) => {
+        const same =
+          String(x.productId) === String(productId) &&
+          String(x.variant || "") === String(variant || "");
+        return same ? { ...x, qty: Number(x.qty || 0) + 1 } : x;
+      })
+    );
+  };
+
+  const dec = (productId, variant = "") => {
+    setItems((prev) =>
+      prev.map((x) => {
+        const same =
+          String(x.productId) === String(productId) &&
+          String(x.variant || "") === String(variant || "");
+        return same ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) } : x;
+      })
+    );
+  };
+
+  const remove = (productId, variant = "") => {
+    setItems((prev) =>
+      prev.filter(
+        (x) =>
+          !(
+            String(x.productId) === String(productId) &&
+            String(x.variant || "") === String(variant || "")
+          )
+      )
+    );
+  };
+
+  const clear = () => {
+    setItems([]);
+    if (typeof window !== "undefined") window.localStorage.removeItem(CART_KEY);
+  };
+
+  // ---------- BUY NOW ----------
+  const buyNow = (product, variant = "", qty = 1) => {
+    const one = {
+      productId: product._id,
+      title: product.title,
+      price: product.price,
+      image:
+        product.images?.[0] ||
+        product.image ||
+        "https://via.placeholder.com/300",
+      variant,
+      qty,
+    };
+
+    setCheckoutItem(one);
+    saveToStorage(BUY_KEY, one);
+  };
+
+  const clearBuyNow = () => {
+    setCheckoutItem(null);
+    if (typeof window !== "undefined") window.localStorage.removeItem(BUY_KEY);
+  };
+
+  const cartCount = useMemo(
+    () => items.reduce((s, x) => s + (Number(x.qty) || 0), 0),
+    [items]
   );
+
+  const value = {
+    items,
+    add,
+    inc,
+    dec,
+    remove,
+    clear,
+    cartCount,
+    buyNow,
+    checkoutItem,
+    clearBuyNow,
+  };
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+}
+
+export function useCart() {
+  const ctx = useContext(CartContext);
+  if (ctx) return ctx;
+
+  // fallback (never crash)
+  return {
+    items: [],
+    add: () => {},
+    inc: () => {},
+    dec: () => {},
+    remove: () => {},
+    clear: () => {},
+    cartCount: 0,
+    buyNow: () => {},
+    checkoutItem: null,
+    clearBuyNow: () => {},
+  };
 }
