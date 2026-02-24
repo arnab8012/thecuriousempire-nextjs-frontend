@@ -1,40 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { api } from "../api/api"; // তোমার path ঠিক থাকলে রাখো
+import { useParams } from "@/utils/useParams";
+import { useNavigate } from "@/utils/useNavigate";
+import { api } from "../api/api";
 import { useCart } from "../context/CartContext";
 
 export default function ProductDetails({ id: idProp }: { id?: string }) {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const { id: idFromUrl } = useParams();
+  const id = idProp || idFromUrl;
 
-  const id = idProp || params?.id;
-
+  const nav = useNavigate();
   const { add, buyNow } = useCart();
 
   const [p, setP] = useState<any>(null);
   const [variant, setVariant] = useState("");
   const [qty, setQty] = useState(1);
+
   const [idx, setIdx] = useState(0);
-  const [err, setErr] = useState("");
+  const [toast, setToast] = useState("");
+
+  // ✅ NEW: error state (ক্র্যাশ না করে message দেখাবে)
+  const [err, setErr] = useState<string>("");
 
   useEffect(() => {
     let alive = true;
-    if (!id) return;
+
+    if (!id) return () => (alive = false);
 
     (async () => {
       try {
-        // ✅ IMPORTANT: base env ঠিক না থাকলে api wrapper ভেঙে যায়
-        const base =
-          process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
-
-        if (!base) {
-          setErr("Missing NEXT_PUBLIC_API_BASE / NEXT_PUBLIC_API_URL");
-          return;
-        }
-
-        // ✅ api wrapper না চাইলে fetch use করতে পারো
+        setErr("");
         const r = await api.get(`/api/products/${id}`);
 
         if (!alive) return;
@@ -45,18 +41,18 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
           setVariant(firstVar);
           setQty(1);
           setIdx(0);
-          setErr("");
         } else {
+          setP(null);
           setErr(r?.message || "Product not found");
         }
       } catch (e: any) {
-        setErr(e?.message || "Fetch failed");
+        if (!alive) return;
+        setP(null);
+        setErr("Network/API error (product load failed)");
       }
     })();
 
-    return () => {
-      alive = false;
-    };
+    return () => (alive = false);
   }, [id]);
 
   const imgs = useMemo(() => {
@@ -64,7 +60,31 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
     return arr.filter(Boolean);
   }, [p?.images]);
 
-  if (err) return <div className="container" style={{ padding: 20 }}>{err}</div>;
+  useEffect(() => {
+    if (imgs.length <= 1) return;
+    const t = setInterval(() => {
+      setIdx((x) => (x + 1) % imgs.length);
+    }, 2500);
+    return () => clearInterval(t);
+  }, [imgs.length]);
+
+  // ✅ error দেখাবে, কিন্তু app crash করবে না
+  if (err) {
+    return (
+      <div className="container" style={{ padding: 16 }}>
+        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 8 }}>
+          Product load failed
+        </div>
+        <div className="muted" style={{ marginBottom: 12 }}>
+          {err}
+        </div>
+        <button className="btnDarkFull" type="button" onClick={() => nav("/shop")}>
+          Back to Shop
+        </button>
+      </div>
+    );
+  }
+
   if (!p) return <div className="container">Loading...</div>;
 
   const mainImg = imgs[idx] || "https://via.placeholder.com/800x500?text=Product";
@@ -78,6 +98,23 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
     price: p.price,
   };
 
+  const prev = () => {
+    if (!imgs.length) return;
+    setIdx((x) => (x - 1 + imgs.length) % imgs.length);
+  };
+
+  const next = () => {
+    if (!imgs.length) return;
+    setIdx((x) => (x + 1) % imgs.length);
+  };
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    const w = window as any;
+    if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
+    w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
+  };
+
   const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
   const availableStock = selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0;
   const canBuy = availableStock > 0 && qty <= availableStock;
@@ -85,18 +122,113 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
   return (
     <div className="container">
       <div className="pd">
+        {/* LEFT: Gallery */}
         <div>
-          <img className="pdImg" src={mainImg} alt={p.title} style={{ width: "100%", borderRadius: 14 }} />
+          <div style={{ position: "relative" }}>
+            <img
+              className="pdImg"
+              src={mainImg}
+              alt={p.title}
+              style={{ width: "100%", borderRadius: 14 }}
+            />
+
+            {imgs.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={prev}
+                  style={{
+                    position: "absolute",
+                    left: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 40,
+                    height: 40,
+                    borderRadius: 999,
+                    border: "none",
+                    cursor: "pointer",
+                    background: "rgba(0,0,0,0.45)",
+                    color: "#fff",
+                    fontSize: 20,
+                  }}
+                  aria-label="Previous image"
+                >
+                  ‹
+                </button>
+
+                <button
+                  type="button"
+                  onClick={next}
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 40,
+                    height: 40,
+                    borderRadius: 999,
+                    border: "none",
+                    cursor: "pointer",
+                    background: "rgba(0,0,0,0.45)",
+                    color: "#fff",
+                    fontSize: 20,
+                  }}
+                  aria-label="Next image"
+                >
+                  ›
+                </button>
+              </>
+            )}
+
+            {imgs.length > 1 && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: 10,
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                {imgs.map((_: any, i: number) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setIdx(i)}
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 999,
+                      border: "none",
+                      cursor: "pointer",
+                      background: i === idx ? "#111" : "rgba(0,0,0,0.25)",
+                    }}
+                    aria-label={`img-${i}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
           {imgs.length > 1 && (
-            <div style={{ display: "flex", gap: 10, marginTop: 12, overflowX: "auto" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                overflowX: "auto",
+                paddingBottom: 6,
+              }}
+            >
               {imgs.map((url: string, i: number) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setIdx(i)}
                   style={{
-                    border: i === idx ? "2px solid #111" : "1px solid #eee",
+                    border: i === idx ? "2px solid #ff007a" : "1px solid #eee",
                     borderRadius: 12,
                     padding: 2,
                     background: "#fff",
@@ -104,19 +236,48 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
                     flex: "0 0 auto",
                   }}
                 >
-                  <img src={url} alt="" width="78" height="60" style={{ objectFit: "cover", borderRadius: 10 }} />
+                  <img
+                    src={url}
+                    alt=""
+                    width="78"
+                    height="60"
+                    style={{ objectFit: "cover", borderRadius: 10 }}
+                  />
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        <div className="pdRight">
+        {/* RIGHT: Details */}
+        <div className="pdRight" style={{ position: "relative" }}>
+          {toast ? (
+            <div
+              style={{
+                position: "sticky",
+                top: 8,
+                zIndex: 20,
+                background: "rgba(0,0,0,0.78)",
+                color: "#fff",
+                padding: "10px 14px",
+                borderRadius: 12,
+                width: "fit-content",
+                fontWeight: 800,
+                marginBottom: 10,
+              }}
+            >
+              ✓ {toast}
+            </div>
+          ) : null}
+
           <h2>{p.title}</h2>
+
           <div className="priceRow">
             <span className="price">৳ {p.price}</span>
             {p.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
           </div>
+
+          <div className="muted">Delivery time: {p.deliveryDays}</div>
 
           {p.variants?.length ? (
             <div className="box">
@@ -133,40 +294,88 @@ export default function ProductDetails({ id: idProp }: { id?: string }) {
 
           <div className="box">
             <div className="lbl">Quantity</div>
-            <input
-              className="qtyInput"
-              value={qty}
-              onChange={(e) => setQty(Math.max(1, Number(e.target.value || 1)))}
-              inputMode="numeric"
-              type="number"
-              min="1"
-            />
-            {availableStock <= 0 ? (
-              <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>Stock Out</div>
-            ) : null}
+
+            <div className="qtyRow">
+              <button
+                className="qtyBtn"
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                type="button"
+              >
+                −
+              </button>
+
+              <input
+                className="qtyInput"
+                value={qty}
+                onChange={(e) => {
+                  const n = Math.max(1, Number((e.target as HTMLInputElement).value || 1));
+                  if (availableStock > 0 && n > availableStock) {
+                    setQty(availableStock);
+                    showToast(`Only ${availableStock} in stock`);
+                    return;
+                  }
+                  setQty(n);
+                }}
+                inputMode="numeric"
+                type="number"
+                min="1"
+              />
+
+              <button
+                className="qtyBtn"
+                onClick={() =>
+                  setQty((q) => {
+                    const nextQty = q + 1;
+                    if (availableStock > 0 && nextQty > availableStock) {
+                      showToast(`Only ${availableStock} in stock`);
+                      return q;
+                    }
+                    return nextQty;
+                  })
+                }
+                type="button"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           <div className="pdBtns">
             <button
               className="btnPinkFull"
+              onClick={() => {
+                if (!canBuy) {
+                  showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                  return;
+                }
+                add(cartItem);
+                showToast("Added to cart");
+              }}
               type="button"
               disabled={!canBuy}
-              onClick={() => add(cartItem)}
             >
               Add to Cart
             </button>
 
             <button
               className="btnDarkFull"
+              onClick={() => {
+                if (!canBuy) {
+                  showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                  return;
+                }
+                buyNow(p, variant, qty);
+                nav("/checkout?mode=buy");
+              }}
               type="button"
               disabled={!canBuy}
-              onClick={() => {
-                buyNow(p, variant, qty);
-                router.push("/checkout?mode=buy");
-              }}
             >
               Buy Now
             </button>
+
+            {availableStock <= 0 ? (
+              <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>Stock Out</div>
+            ) : null}
           </div>
 
           <div className="box">
