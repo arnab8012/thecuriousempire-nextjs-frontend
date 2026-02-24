@@ -18,7 +18,7 @@ function cleanText(v: any) {
     .trim();
 }
 
-function absUrl(url: string) {
+function absUrl(url: any) {
   const u = String(url || "");
   if (!u) return `${SITE}/logo.png`;
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
@@ -78,6 +78,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
   const [toast, setToast] = useState("");
   const [err, setErr] = useState<string>("");
 
+  // ✅ initial product থাকলে variant init
   useEffect(() => {
     if (!initialProduct) return;
     const firstVar = initialProduct?.variants?.[0]?.name || "";
@@ -86,6 +87,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     setIdx(0);
   }, [initialProduct]);
 
+  // ✅ Fetch product safely (client)
   useEffect(() => {
     let alive = true;
     if (!id) return () => (alive = false);
@@ -97,8 +99,10 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
         if (!alive) return;
 
         if (r?.ok) {
-          setP(r.product);
-          const firstVar = r.product?.variants?.[0]?.name || "";
+          const prod = r.product;
+          setP(prod);
+
+          const firstVar = prod?.variants?.[0]?.name || "";
           setVariant((v) => v || firstVar);
           setQty(1);
           setIdx(0);
@@ -120,17 +124,29 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     return () => (alive = false);
   }, [id, initialProduct]);
 
+  // ✅ IMPORTANT FIX: images array can contain object, not only string
   const imgs = useMemo(() => {
-    const arr = Array.isArray(p?.images) ? p.images : [];
-    return arr.filter(Boolean);
+    const raw = Array.isArray(p?.images) ? p.images : [];
+
+    return raw
+      .map((x: any) => {
+        if (!x) return "";
+        if (typeof x === "string") return x;
+        if (typeof x === "object") return x.url || x.secure_url || x.path || "";
+        return "";
+      })
+      .filter(Boolean)
+      .map(absUrl);
   }, [p?.images]);
 
+  // ✅ Auto slider
   useEffect(() => {
     if (imgs.length <= 1) return;
     const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
     return () => clearInterval(t);
   }, [imgs.length]);
 
+  // ✅ Client-side SEO + JSON-LD (browser)
   useEffect(() => {
     if (!p?._id) return;
 
@@ -143,7 +159,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
       "Premium Shopping Experience — Unique products delivered with quality & care.";
     const description = desc.slice(0, 180);
 
-    const ogImg = absUrl((Array.isArray(p?.images) && p.images[0]) || p?.image || "/logo.png");
+    const ogImg = imgs[0] || absUrl(p?.image || "/logo.png");
 
     document.title = title;
     upsertLink("canonical", canonical);
@@ -169,7 +185,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
       "@context": "https://schema.org",
       "@type": "Product",
       name: cleanText(p?.title),
-      image: imgs.length ? imgs.map(absUrl) : [absUrl("/logo.png")],
+      image: imgs.length ? imgs : [absUrl("/logo.png")],
       description: description,
       sku: String(p?._id || ""),
       brand: { "@type": "Brand", name: "The Curious Empire" },
@@ -184,8 +200,9 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     };
 
     upsertJsonLd("tce-product-jsonld", jsonLd);
-  }, [p?._id, p?.title, p?.description, p?.price, imgs.length]);
+  }, [p?._id, p?.title, p?.description, p?.price, imgs]);
 
+  // ✅ error show (no crash)
   if (err) {
     return (
       <div className="container" style={{ padding: 16 }}>
@@ -202,15 +219,15 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
 
   if (!p) return <div className="container">Loading...</div>;
 
-  const mainImg = imgs[idx] || "https://via.placeholder.com/800x500?text=Product";
+  const mainImg = imgs[idx] || imgs[0] || "https://via.placeholder.com/800x500?text=Product";
 
   const cartItem = {
-    productId: p._id,
-    title: p.title,
+    productId: p?._id,
+    title: p?.title || "Product",
     image: imgs[0] || mainImg,
     variant,
     qty,
-    price: p.price,
+    price: p?.price ?? 0,
   };
 
   const prev = () => {
@@ -230,16 +247,17 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
   };
 
-  const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
+  const selectedVar = (p?.variants || []).find((v: any) => v?.name === variant);
   const availableStock = selectedVar?.stock ?? p?.variants?.[0]?.stock ?? 0;
   const canBuy = availableStock > 0 && qty <= availableStock;
 
   return (
     <div className="container">
       <div className="pd">
+        {/* LEFT: Gallery */}
         <div>
           <div style={{ position: "relative" }}>
-            <img className="pdImg" src={mainImg} alt={p.title} style={{ width: "100%", borderRadius: 14 }} />
+            <img className="pdImg" src={String(mainImg)} alt={p?.title || "Product"} style={{ width: "100%", borderRadius: 14 }} />
 
             {imgs.length > 1 && (
               <>
@@ -337,13 +355,14 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
                     flex: "0 0 auto",
                   }}
                 >
-                  <img src={url} alt="" width="78" height="60" style={{ objectFit: "cover", borderRadius: 10 }} />
+                  <img src={String(url)} alt="" width="78" height="60" style={{ objectFit: "cover", borderRadius: 10 }} />
                 </button>
               ))}
             </div>
           )}
         </div>
 
+        {/* RIGHT: Details */}
         <div className="pdRight" style={{ position: "relative" }}>
           {toast ? (
             <div
@@ -364,22 +383,22 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
             </div>
           ) : null}
 
-          <h2>{p.title}</h2>
+          <h2>{p?.title || "Product"}</h2>
 
           <div className="priceRow">
-            <span className="price">৳ {p.price}</span>
-            {p.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
+            <span className="price">৳ {p?.price ?? 0}</span>
+            {p?.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
           </div>
 
-          <div className="muted">Delivery time: {p.deliveryDays}</div>
+          <div className="muted">Delivery time: {p?.deliveryDays ?? ""}</div>
 
-          {p.variants?.length ? (
+          {p?.variants?.length ? (
             <div className="box">
               <div className="lbl">Available variant:</div>
               <select value={variant} onChange={(e) => setVariant(e.target.value)} className="input">
                 {p.variants.map((v: any, i: number) => (
-                  <option key={i} value={v.name}>
-                    {v.name} (Stock: {v.stock})
+                  <option key={i} value={String(v?.name || "")}>
+                    {String(v?.name || "")} (Stock: {Number(v?.stock ?? 0)})
                   </option>
                 ))}
               </select>
@@ -470,7 +489,7 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
 
           <div className="box">
             <h4>Description</h4>
-            <p className="product-description muted">{p.description || "No description yet."}</p>
+            <p className="product-description muted">{p?.description || "No description yet."}</p>
           </div>
         </div>
       </div>
