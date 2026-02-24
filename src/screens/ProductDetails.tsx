@@ -65,7 +65,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
   const router = useRouter();
   const params = useParams();
 
-  // Next.js useParams returns Record<string, string | string[]>
   const idFromUrl = (params?.id as string) || "";
   const id = idProp || idFromUrl;
 
@@ -79,7 +78,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
   const [toast, setToast] = useState("");
   const [err, setErr] = useState<string>("");
 
-  // ✅ initial product থাকলে variant init
   useEffect(() => {
     if (!initialProduct) return;
     const firstVar = initialProduct?.variants?.[0]?.name || "";
@@ -88,7 +86,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     setIdx(0);
   }, [initialProduct]);
 
-  // ✅ Fetch product safely (client)
   useEffect(() => {
     let alive = true;
     if (!id) return () => (alive = false);
@@ -128,14 +125,12 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     return arr.filter(Boolean);
   }, [p?.images]);
 
-  // ✅ Auto slider
   useEffect(() => {
     if (imgs.length <= 1) return;
     const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
     return () => clearInterval(t);
   }, [imgs.length]);
 
-  // ✅ Client-side SEO + JSON-LD (browser)
   useEffect(() => {
     if (!p?._id) return;
 
@@ -150,27 +145,22 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
 
     const ogImg = absUrl((Array.isArray(p?.images) && p.images[0]) || p?.image || "/logo.png");
 
-    // title + canonical
     document.title = title;
     upsertLink("canonical", canonical);
 
-    // basic meta
     upsertMeta('meta[name="description"]', { name: "description", content: description });
 
-    // OG
     upsertMeta('meta[property="og:title"]', { property: "og:title", content: title });
     upsertMeta('meta[property="og:description"]', { property: "og:description", content: description });
     upsertMeta('meta[property="og:url"]', { property: "og:url", content: canonical });
     upsertMeta('meta[property="og:type"]', { property: "og:type", content: "product" });
     upsertMeta('meta[property="og:image"]', { property: "og:image", content: ogImg });
 
-    // Twitter
     upsertMeta('meta[name="twitter:card"]', { name: "twitter:card", content: "summary_large_image" });
     upsertMeta('meta[name="twitter:title"]', { name: "twitter:title", content: title });
     upsertMeta('meta[name="twitter:description"]', { name: "twitter:description", content: description });
     upsertMeta('meta[name="twitter:image"]', { name: "twitter:image", content: ogImg });
 
-    // ✅ JSON-LD schema
     const price = Number(p?.price);
     const hasStock = Array.isArray(p?.variants) ? p.variants.some((v: any) => Number(v?.stock) > 0) : true;
     const availability = hasStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock";
@@ -196,7 +186,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
     upsertJsonLd("tce-product-jsonld", jsonLd);
   }, [p?._id, p?.title, p?.description, p?.price, imgs.length]);
 
-  // ✅ error show (no crash)
   if (err) {
     return (
       <div className="container" style={{ padding: 16 }}>
@@ -248,7 +237,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
   return (
     <div className="container">
       <div className="pd">
-        {/* LEFT: Gallery */}
         <div>
           <div style={{ position: "relative" }}>
             <img className="pdImg" src={mainImg} alt={p.title} style={{ width: "100%", borderRadius: 14 }} />
@@ -356,7 +344,6 @@ export default function ProductDetails({ id: idProp, initialProduct }: ProductDe
           )}
         </div>
 
-        {/* RIGHT: Details */}
         <div className="pdRight" style={{ position: "relative" }}>
           {toast ? (
             <div
