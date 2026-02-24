@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { api } from "../api/api";
+import { useParams, useRouter } from "next/navigation";
 import { useCart } from "../context/CartContext";
 
-export default function ProductDetails({ id }: { id: string }) {
+type Props = { id?: string };
+
+export default function ProductDetails({ id: idProp }: Props) {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
+
+  const id = idProp || params?.id;
+
   const { add, buyNow } = useCart();
 
   const [p, setP] = useState<any>(null);
@@ -19,28 +24,45 @@ export default function ProductDetails({ id }: { id: string }) {
   // ✅ toast
   const [toast, setToast] = useState("");
 
+  const base =
+    process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_API_URL;
+
   useEffect(() => {
     let alive = true;
 
     if (!id) return () => (alive = false);
 
     (async () => {
-      const r = await api.get(`/api/products/${id}`);
-      if (!alive) return;
+      try {
+        if (!base) throw new Error("Missing NEXT_PUBLIC_API_BASE / NEXT_PUBLIC_API_URL");
 
-      if (r.ok) {
-        setP(r.product);
-        const firstVar = r.product?.variants?.[0]?.name || "";
+        const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+
+        if (!alive) return;
+
+        if (!res.ok) {
+          console.error("Product fetch failed:", res.status, data);
+          setP(null);
+          return;
+        }
+
+        const product = data?.product ?? data;
+        setP(product);
+
+        const firstVar = product?.variants?.[0]?.name || "";
         setVariant(firstVar);
         setQty(1);
         setIdx(0);
-      } else {
-        alert(r.message || "Not found");
+      } catch (e) {
+        console.error("ProductDetails error:", e);
+        if (!alive) return;
+        setP(null);
       }
     })();
 
     return () => (alive = false);
-  }, [id]);
+  }, [id, base]);
 
   const imgs = useMemo(() => {
     const arr = Array.isArray(p?.images) ? p.images : [];
@@ -50,12 +72,18 @@ export default function ProductDetails({ id }: { id: string }) {
   // ✅ auto image change
   useEffect(() => {
     if (imgs.length <= 1) return;
-    const t = setInterval(() => {
-      setIdx((x) => (x + 1) % imgs.length);
-    }, 2500);
+    const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
     return () => clearInterval(t);
   }, [imgs.length]);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    const w = window as any;
+    if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
+    w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
+  };
+
+  if (!id) return <div className="container">Invalid product</div>;
   if (!p) return <div className="container">Loading...</div>;
 
   const mainImg = imgs[idx] || "https://via.placeholder.com/800x500?text=Product";
@@ -69,22 +97,8 @@ export default function ProductDetails({ id }: { id: string }) {
     price: p.price,
   };
 
-  const prev = () => {
-    if (!imgs.length) return;
-    setIdx((x) => (x - 1 + imgs.length) % imgs.length);
-  };
-
-  const next = () => {
-    if (!imgs.length) return;
-    setIdx((x) => (x + 1) % imgs.length);
-  };
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    const w = window as any;
-    if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
-    w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
-  };
+  const prev = () => imgs.length && setIdx((x) => (x - 1 + imgs.length) % imgs.length);
+  const next = () => imgs.length && setIdx((x) => (x + 1) % imgs.length);
 
   // ✅ variant-based stock
   const selectedVar = (p?.variants || []).find((v: any) => v.name === variant);
