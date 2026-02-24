@@ -1,10 +1,10 @@
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
-const ProductDetails = dynamic(() => import("@/screens/ProductDetails"), {
+// ✅ Client-only ProductDetails (prevents SSR issues)
+const ProductDetails = dynamicImport(() => import("@/screens/ProductDetails"), {
   ssr: false,
 });
 
@@ -27,6 +27,14 @@ function cleanText(x: any) {
     .trim();
 }
 
+function toAbsImageUrl(img: any) {
+  const s = String(img || "");
+  if (!s) return `${SITE}/logo.png`;
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  // if backend returns "/uploads/..." or "uploads/..."
+  return `${SITE}${s.startsWith("/") ? "" : "/"}${s}`;
+}
+
 export async function generateMetadata(
   { params }: { params: { id: string } }
 ): Promise<Metadata> {
@@ -34,7 +42,6 @@ export async function generateMetadata(
   const canonical = `${SITE}/product/${id}`;
   const base = pickApiBase();
 
-  // fallback (কোন অবস্থাতেই page ভাঙবে না)
   const fallback: Metadata = {
     title: "Product | The Curious Empire",
     description: "Premium Shopping Experience — Unique products delivered with quality & care.",
@@ -61,7 +68,11 @@ export async function generateMetadata(
     const data = await res.json();
     const p = data?.product;
 
-    const title = p?.title ? `${cleanText(p.title)} | The Curious Empire` : fallback.title!;
+    if (!p) return fallback;
+
+    const titleBase = p?.title ? cleanText(p.title) : "Product";
+    const title = `${titleBase} | The Curious Empire`;
+
     const description = cleanText(p?.description || p?.title || fallback.description).slice(0, 180);
 
     const img0 =
@@ -69,9 +80,7 @@ export async function generateMetadata(
       p?.image ||
       `${SITE}/logo.png`;
 
-    const ogImage = String(img0).startsWith("http")
-      ? String(img0)
-      : `${SITE}${String(img0).startsWith("/") ? "" : "/"}${img0}`;
+    const ogImage = toAbsImageUrl(img0);
 
     return {
       title,
@@ -109,10 +118,12 @@ export default async function Page({ params }: { params: { id: string } }) {
       const data = await res.json();
       p = data?.product || null;
     }
-  } catch {}
+  } catch {
+    // ignore (we will render safe UI)
+  }
 
   // ✅ Schema.org Product JSON-LD (Google rich results)
-  const images = Array.isArray(p?.images) ? p.images.filter(Boolean) : [];
+  const images = Array.isArray(p?.images) ? p.images.filter(Boolean).map(toAbsImageUrl) : [];
   const price = Number(p?.price || 0);
 
   const availability =
@@ -151,7 +162,7 @@ export default async function Page({ params }: { params: { id: string } }) {
         />
       ) : null}
 
-      {/* Client component */}
+      {/* ✅ Render client component safely */}
       <ProductDetails id={id} initialProduct={p || undefined} />
     </>
   );
