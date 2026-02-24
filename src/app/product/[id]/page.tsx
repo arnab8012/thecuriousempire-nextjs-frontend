@@ -2,7 +2,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
-import ProductDetails from "@/screens/ProductDetails";
+import dynamic from "next/dynamic";
+
+const ProductDetails = dynamic(() => import("@/screens/ProductDetails"), {
+  ssr: false,
+});
 
 const SITE = "https://thecuriousempire.com";
 const PROD_FALLBACK = "https://api.thecuriousempire.com";
