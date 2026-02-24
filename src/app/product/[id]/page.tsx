@@ -1,3 +1,4 @@
+// src/app/product/[id]/page.tsx
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -5,11 +6,10 @@ import ProductDetails from "@/screens/ProductDetails";
 import type { Metadata } from "next";
 
 function pickBaseUrl() {
-  // ✅ backend base url (no trailing slash recommended)
   return (
     process.env.NEXT_PUBLIC_API_BASE ||
     process.env.NEXT_PUBLIC_API_URL ||
-    process.env.API_BASE || // optional
+    process.env.API_BASE ||
     ""
   ).replace(/\/+$/, "");
 }
@@ -22,9 +22,6 @@ export async function generateMetadata(
   const site = "https://thecuriousempire.com";
   const canonical = `${site}/product/${id}`;
 
-  const base = pickBaseUrl();
-
-  // ✅ fallback (backend/env problem হলেও product page ভাঙবে না)
   const fallback: Metadata = {
     title: "Product | The Curious Empire",
     description: "Premium Shopping Experience — Unique products delivered with quality & care.",
@@ -44,6 +41,7 @@ export async function generateMetadata(
     },
   };
 
+  const base = pickBaseUrl();
   if (!base) return fallback;
 
   try {
@@ -53,16 +51,13 @@ export async function generateMetadata(
     const data = await res.json();
     const p = data?.product ?? data;
 
-    const title = p?.title
-      ? `${p.title} | The Curious Empire`
-      : fallback.title!;
+    const title = p?.title ? `${p.title} | The Curious Empire` : "Product | The Curious Empire";
 
-    const descRaw =
+    const description = String(
       typeof p?.description === "string"
         ? p.description
-        : "Premium Shopping Experience — Unique products delivered with quality & care.";
-
-    const description = String(descRaw).replace(/\s+/g, " ").trim().slice(0, 180);
+        : "Premium Shopping Experience — Unique products delivered with quality & care."
+    ).replace(/\s+/g, " ").trim().slice(0, 180);
 
     const img0 =
       (Array.isArray(p?.images) && p.images[0]) ||
@@ -97,6 +92,5 @@ export async function generateMetadata(
 }
 
 export default function Page({ params }: { params: { id: string } }) {
-  // ✅ client component কে id pass করা হচ্ছে
   return <ProductDetails id={params.id} />;
 }
