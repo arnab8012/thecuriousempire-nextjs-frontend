@@ -33,7 +33,7 @@ function absUrl(url: any) {
   return `${SITE}/${u}`;
 }
 
-async function fetchProduct(id: string) {
+async function fetchProductSafe(id: string) {
   const base = pickApiBase();
 
   try {
@@ -44,7 +44,8 @@ async function fetchProduct(id: string) {
     const p = data?.product || null;
     if (!p?._id) return null;
 
-    return p;
+    // ✅ IMPORTANT: make it plain JSON (removes ObjectId/Date/etc)
+    return JSON.parse(JSON.stringify(p));
   } catch {
     return null;
   }
@@ -56,7 +57,6 @@ export async function generateMetadata(
   const id = params.id;
   const canonical = `${SITE}/product/${id}`;
 
-  // ✅ Always-safe fallback (SEO + No crash)
   const fallback: Metadata = {
     title: "Product | The Curious Empire",
     description: "Premium Shopping Experience — Unique products delivered with quality & care.",
@@ -76,7 +76,7 @@ export async function generateMetadata(
     },
   };
 
-  const p = await fetchProduct(id);
+  const p = await fetchProductSafe(id);
   if (!p) return fallback;
 
   const title = p?.title ? `${cleanText(p.title)} | The Curious Empire` : fallback.title!;
@@ -113,11 +113,9 @@ export default async function Page({ params }: { params: { id: string } }) {
   const id = params.id;
   const canonical = `${SITE}/product/${id}`;
 
-  // ✅ Server tries to fetch (for JSON-LD + initialProduct)
-  // ✅ If fails, page still loads (client will fetch)
-  const p = await fetchProduct(id);
+  // ✅ Only for JSON-LD (SEO). We do NOT pass p to client anymore.
+  const p = await fetchProductSafe(id);
 
-  // ✅ Server-side JSON-LD (best for Google rich results)
   const images = Array.isArray(p?.images) ? p.images.filter(Boolean).map(absUrl) : [];
   const priceNum = Number(p?.price || 0);
 
@@ -157,8 +155,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         />
       ) : null}
 
-      {/* ✅ Client component: never crashes; API fail হলেও নিজে fetch করবে */}
-      <ProductDetails id={id} initialProduct={p || undefined} />
+      {/* ✅ Client will fetch product নিজেই */}
+      <ProductDetails id={id} />
     </>
   );
 }
