@@ -177,7 +177,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       ) : null}
 
       {/* Client component */}
-      <ProductDetails id={id} initialProduct={p || undefined} />
+      <ProductDetails id={id} />
     </>
   );
 }
