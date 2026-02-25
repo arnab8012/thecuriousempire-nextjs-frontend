@@ -2,118 +2,116 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "../api/api";
 import { useCart } from "../context/CartContext";
+import { api } from "../api/api";
 
-type ProductDetailsProps = { id: string };
+type ProductDetailsProps = {
+  id?: string;
+};
 
-const PROD_FALLBACK = "https://api.thecuriousempire.com";
-const SITE_FALLBACK = "https://thecuriousempire.com";
+const FALLBACK_IMG = "https://via.placeholder.com/800x500?text=Product";
 
-function pickApiBaseClient() {
-  const raw =
-    process.env.NEXT_PUBLIC_API_BASE ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    (process.env.NODE_ENV === "production" ? PROD_FALLBACK : "http://localhost:5000");
-  return String(raw || "").replace(/\/+$/, "");
-}
-
-function s(v: any, fb = "") {
-  if (v == null) return fb;
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  // object/array → safe stringify-ish
-  try {
-    if (typeof v?.toString === "function" && v.toString !== Object.prototype.toString) return String(v);
-  } catch {}
-  return fb;
-}
-
-function num(v: any, fb = 0) {
+function toNum(v: any, def = 0) {
   const n = Number(v);
-  return Number.isFinite(n) ? n : fb;
+  return Number.isFinite(n) ? n : def;
 }
 
-// ✅ supports images as string OR {url} OR {src}
-function normalizeImage(x: any): string {
-  const base = pickApiBaseClient();
-  const raw =
-    typeof x === "string"
-      ? x
-      : typeof x === "object" && x
-      ? (x.url || x.src || x.path || "")
-      : "";
+function safeText(v: any) {
+  return String(v ?? "").trim();
+}
 
-  const u = String(raw || "").trim();
-  if (!u) return `${SITE_FALLBACK}/logo.png`;
-  if (u.startsWith("http://") || u.startsWith("https://")) return u;
-  if (u.startsWith("/")) return `${base}${u}`;
-  return `${base}/${u}`;
+function safeArray(v: any) {
+  return Array.isArray(v) ? v : [];
 }
 
 export default function ProductDetails({ id }: ProductDetailsProps) {
   const router = useRouter();
-  const { add, buyNow } = useCart();
+
+  // ✅ useCart না থাকলেও crash না করার জন্য safe fallback
+  const cart = useCart?.() as any;
+  const add = cart?.add || (() => {});
+  const buyNow = cart?.buyNow || (() => {});
 
   const [p, setP] = useState<any>(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const [idx, setIdx] = useState(0);
   const [variant, setVariant] = useState("");
   const [qty, setQty] = useState(1);
-  const [idx, setIdx] = useState(0);
-
   const [toast, setToast] = useState("");
-  const [err, setErr] = useState("");
 
+  // ✅ product fetch
   useEffect(() => {
     let alive = true;
-    if (!id) return () => (alive = false);
+    if (!id) {
+      setErr("Missing product id");
+      setLoading(false);
+      return () => {
+        alive = false;
+      };
+    }
 
     (async () => {
       try {
+        setLoading(true);
         setErr("");
+
         const r = await api.get(`/api/products/${id}`);
         if (!alive) return;
 
         if (r?.ok && r?.product) {
           setP(r.product);
-          const firstVar = s(r.product?.variants?.[0]?.name, "");
+
+          const firstVar = r.product?.variants?.[0]?.name || "";
           setVariant(firstVar);
           setQty(1);
           setIdx(0);
         } else {
+          setErr(r?.message || "Product not found");
           setP(null);
-          setErr(s(r?.message, "Product not found"));
         }
       } catch (e: any) {
         if (!alive) return;
+        setErr("Network/API error (product load failed)");
         setP(null);
-        setErr(s(e?.message, "Network/API error"));
+      } finally {
+        if (!alive) return;
+        setLoading(false);
       }
     })();
 
-    return () => (alive = false);
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   const imgs = useMemo(() => {
-    const arr = Array.isArray(p?.images) ? p.images : [];
-    const list = arr.map(normalizeImage).filter(Boolean);
-    if (list.length) return list;
-
-    const single = p?.image ? normalizeImage(p.image) : "";
-    return single ? [single] : [`${SITE_FALLBACK}/logo.png`];
+    const arr = safeArray(p?.images).filter(Boolean);
+    return arr.length ? arr : [p?.image].filter(Boolean);
   }, [p?.images, p?.image]);
 
+  // ✅ auto slide (optional)
   useEffect(() => {
     if (imgs.length <= 1) return;
-    const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 2500);
+    const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 3000);
     return () => clearInterval(t);
   }, [imgs.length]);
 
+  const mainImg = imgs[idx] || FALLBACK_IMG;
+
+  const variants = safeArray(p?.variants);
+  const selectedVar = variants.find((v: any) => String(v?.name) === String(variant));
+  const availableStock = toNum(selectedVar?.stock ?? variants?.[0]?.stock ?? 0, 0);
+  const canBuy = availableStock > 0 && qty <= availableStock;
+
   const showToast = (msg: string) => {
     setToast(msg);
-    const w = window as any;
-    if (w.__pd_toast_t) window.clearTimeout(w.__pd_toast_t);
-    w.__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
+    window.clearTimeout((window as any).__pd_toast_t);
+    (window as any).__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
   };
+
+  if (loading) return <div className="container" style={{ padding: 16 }}>Loading...</div>;
 
   if (err) {
     return (
@@ -127,38 +125,16 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
     );
   }
 
-  if (!p) return <div className="container">Loading...</div>;
-
-  const title = s(p?.title, "Product");
-  const price = num(p?.price, 0);
-  const compareAt = p?.compareAtPrice ? num(p.compareAtPrice, 0) : 0;
-
-  const mainImg = imgs[idx] || `${SITE_FALLBACK}/logo.png`;
-
-  const variants = Array.isArray(p?.variants) ? p.variants : [];
-  const safeVariantNames = variants.map((v: any) => s(v?.name, "")).filter(Boolean);
-
-  // variant pick fallback
-  useEffect(() => {
-    if (!variant && safeVariantNames.length) setVariant(safeVariantNames[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [safeVariantNames.length]);
-
-  const selectedVar = variants.find((v: any) => s(v?.name, "") === variant);
-  const availableStock = num(selectedVar?.stock ?? variants?.[0]?.stock, 0);
-  const canBuy = availableStock > 0 && qty <= availableStock;
+  if (!p) return <div className="container" style={{ padding: 16 }}>No product.</div>;
 
   const cartItem = {
-    productId: s(p?._id, ""),
-    title,
+    productId: p._id,
+    title: p.title,
     image: imgs[0] || mainImg,
     variant,
     qty,
-    price,
+    price: p.price,
   };
-
-  const prev = () => imgs.length && setIdx((x) => (x - 1 + imgs.length) % imgs.length);
-  const next = () => imgs.length && setIdx((x) => (x + 1) % imgs.length);
 
   return (
     <div className="container">
@@ -169,16 +145,18 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <img
               className="pdImg"
               src={mainImg}
-              alt={title}
+              alt={safeText(p.title) || "Product"}
               style={{ width: "100%", borderRadius: 14 }}
-              onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE_FALLBACK}/logo.png`)}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
+              }}
             />
 
             {imgs.length > 1 && (
               <>
                 <button
                   type="button"
-                  onClick={prev}
+                  onClick={() => setIdx((x) => (x - 1 + imgs.length) % imgs.length)}
                   style={{
                     position: "absolute",
                     left: 10,
@@ -200,7 +178,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
                 <button
                   type="button"
-                  onClick={next}
+                  onClick={() => setIdx((x) => (x + 1) % imgs.length)}
                   style={{
                     position: "absolute",
                     right: 10,
@@ -227,7 +205,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <div style={{ display: "flex", gap: 10, marginTop: 12, overflowX: "auto", paddingBottom: 6 }}>
               {imgs.map((url: string, i: number) => (
                 <button
-                  key={i}
+                  key={url + i}
                   type="button"
                   onClick={() => setIdx(i)}
                   style={{
@@ -245,7 +223,9 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
                     width="78"
                     height="60"
                     style={{ objectFit: "cover", borderRadius: 10 }}
-                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${SITE_FALLBACK}/logo.png`)}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "https://via.placeholder.com/78x60?text=Img";
+                    }}
                   />
                 </button>
               ))}
@@ -274,27 +254,24 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             </div>
           ) : null}
 
-          <h2>{title}</h2>
+          <h2>{p.title}</h2>
 
           <div className="priceRow">
-            <span className="price">৳ {price}</span>
-            {compareAt ? <span className="cut">৳ {compareAt}</span> : null}
+            <span className="price">৳ {p.price}</span>
+            {p.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
           </div>
 
-          <div className="muted">Delivery time: {s(p?.deliveryDays, "")}</div>
+          <div className="muted">Delivery time: {p.deliveryDays}</div>
 
-          {safeVariantNames.length ? (
+          {variants.length ? (
             <div className="box">
               <div className="lbl">Available variant:</div>
               <select value={variant} onChange={(e) => setVariant(e.target.value)} className="input">
-                {safeVariantNames.map((name: string, i: number) => {
-                  const v = variants.find((x: any) => s(x?.name, "") === name);
-                  return (
-                    <option key={i} value={name}>
-                      {name} (Stock: {num(v?.stock, 0)})
-                    </option>
-                  );
-                })}
+                {variants.map((v: any, i: number) => (
+                  <option key={String(v?.name || i)} value={v.name}>
+                    {v.name} (Stock: {toNum(v.stock, 0)})
+                  </option>
+                ))}
               </select>
             </div>
           ) : null}
@@ -310,13 +287,34 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
               <input
                 className="qtyInput"
                 value={qty}
-                onChange={(e) => setQty(Math.max(1, num((e.target as HTMLInputElement).value, 1)))}
+                onChange={(e) => {
+                  const n = Math.max(1, Number((e.target as HTMLInputElement).value || 1));
+                  if (availableStock > 0 && n > availableStock) {
+                    setQty(availableStock);
+                    showToast(`Only ${availableStock} in stock`);
+                    return;
+                  }
+                  setQty(n);
+                }}
                 inputMode="numeric"
                 type="number"
                 min="1"
               />
 
-              <button className="qtyBtn" onClick={() => setQty((q) => q + 1)} type="button">
+              <button
+                className="qtyBtn"
+                onClick={() =>
+                  setQty((q) => {
+                    const nextQty = q + 1;
+                    if (availableStock > 0 && nextQty > availableStock) {
+                      showToast(`Only ${availableStock} in stock`);
+                      return q;
+                    }
+                    return nextQty;
+                  })
+                }
+                type="button"
+              >
                 +
               </button>
             </div>
@@ -326,7 +324,10 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <button
               className="btnPinkFull"
               onClick={() => {
-                if (!canBuy) return showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                if (!canBuy) {
+                  showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                  return;
+                }
                 add(cartItem);
                 showToast("Added to cart");
               }}
@@ -339,7 +340,10 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <button
               className="btnDarkFull"
               onClick={() => {
-                if (!canBuy) return showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                if (!canBuy) {
+                  showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                  return;
+                }
                 buyNow(p, variant, qty);
                 router.push("/checkout?mode=buy");
               }}
@@ -356,7 +360,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
           <div className="box">
             <h4>Description</h4>
-            <p className="product-description muted">{s(p?.description, "No description yet.")}</p>
+            <p className="product-description muted">{p.description || "No description yet."}</p>
           </div>
         </div>
       </div>
