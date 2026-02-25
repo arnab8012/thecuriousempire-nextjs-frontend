@@ -1,11 +1,6 @@
-"use client";
-
-import { useParams } from "next/navigation";
+// src/app/product/[id]/page.tsx
 import ProductDetails from "@/screens/ProductDetails";
 
-export default function Page() {
-  const params = useParams();
-  const id = (params?.id as string) || "";
-
-  return <ProductDetails id={id} />;
+export default function Page({ params }: { params: { id: string } }) {
+  return <ProductDetails id={params.id} />;
 }
