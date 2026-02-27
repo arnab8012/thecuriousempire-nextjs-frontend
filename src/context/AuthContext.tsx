@@ -1,24 +1,46 @@
 "use client";
 
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../api/api";
 import { useCart } from "./CartContext";
 import { useFavorites } from "./FavoritesContext";
 
-const AuthContext = createContext(null);
+type UserType = any;
 
-function getUid(u) {
-  // ✅ যেটা তোমার user object এ আছে সেটা ধরবে
+type AuthContextValue = {
+  user: UserType | null;
+  booting: boolean;
+  login: (phone: string, password: string) => Promise<any>;
+  register: (payload: { fullName: string; phone: string; password: string; gender?: string }) => Promise<any>;
+  logout: () => void;
+  refreshMe: () => Promise<any>;
+  updateMe: (payload: any) => Promise<any>;
+  resetPassword: (phone: string, fullName: string, newPassword: string) => Promise<any>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+type CartContextType = {
+  useUserCart?: (uid: string) => void;
+};
+
+type FavoritesContextType = {
+  useUserFav?: (uid: string) => void;
+};
+
+function getUid(u: any) {
   return u?._id || u?.id || u?.phone || u?.email || "";
 }
 
-export function AuthProvider({ children }) {
-  const cart = useCart();
-  const fav = useFavorites();
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // ✅ Safe: provider না থাকলে null হতে পারে
+  const cart = (useCart() as unknown as CartContextType) || null;
+  const fav = (useFavorites() as unknown as FavoritesContextType) || null;
 
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<UserType | null>(null);
   const [booting, setBooting] = useState(true);
+
+  const safeLocalStorage = () => (typeof window !== "undefined" ? window.localStorage : null);
 
   // ===== BOOT: token থাকলে /me =====
   useEffect(() => {
@@ -26,7 +48,8 @@ export function AuthProvider({ children }) {
 
     (async () => {
       try {
-        const t = localStorage.getItem("token");
+        const ls = safeLocalStorage();
+        const t = ls?.getItem("token") || "";
 
         if (!t) {
           if (alive) {
@@ -44,22 +67,23 @@ export function AuthProvider({ children }) {
         if (!alive) return;
 
         if (r?.ok) {
-          const u = r.user || null;
+          const u = r?.user || null;
           setUser(u);
 
           const uid = getUid(u);
           cart?.useUserCart?.(uid);
           fav?.useUserFav?.(uid);
         } else {
-          localStorage.removeItem("token");
+          ls?.removeItem("token");
           setUser(null);
 
           cart?.useUserCart?.("");
           fav?.useUserFav?.("");
         }
-      } catch (e) {
+      } catch {
         if (alive) {
-          localStorage.removeItem("token");
+          const ls = safeLocalStorage();
+          ls?.removeItem("token");
           setUser(null);
 
           cart?.useUserCart?.("");
@@ -77,33 +101,35 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ===== LOGIN =====
-const login = async (phone, password) => {
-  const r = await api.post("/api/auth/login", { phone, password });
-  if (!r?.ok) return r;
+  const login = async (phone: string, password: string) => {
+    const r = await api.post("/api/auth/login", { phone, password });
+    if (!r?.ok) return r;
 
-  // token save
-  localStorage.setItem("token", r.token);
+    const ls = safeLocalStorage();
+    ls?.setItem("token", r.token);
 
-  // 🔥 IMPORTANT: DB থেকে fresh user নাও
-  const me = await api.getAuth("/api/auth/me", r.token);
-  const u = me?.ok ? me.user : r.user || null;
+    // ✅ DB থেকে fresh user
+    const me = await api.getAuth("/api/auth/me", r.token);
+    const u = me?.ok ? me.user : r.user || null;
 
-  setUser(u);
+    setUser(u);
 
-  const uid = getUid(u) || phone;
-  cart?.useUserCart?.(uid);
-  fav?.useUserFav?.(uid);
+    const uid = getUid(u) || phone;
+    cart?.useUserCart?.(uid);
+    fav?.useUserFav?.(uid);
 
-  setBooting(false);
-  return { ok: true, user: u };
-};
+    setBooting(false);
+    return { ok: true, user: u };
+  };
 
   // ===== REGISTER =====
-  const register = async ({ fullName, phone, password, gender }) => {
+  const register = async (payload: { fullName: string; phone: string; password: string; gender?: string }) => {
+    const { fullName, phone, password, gender } = payload;
     const r = await api.post("/api/auth/register", { fullName, phone, password, gender });
     if (!r?.ok) return r;
 
-    if (r.token) localStorage.setItem("token", r.token);
+    const ls = safeLocalStorage();
+    if (r.token) ls?.setItem("token", r.token);
 
     const u = r.user || null;
     setUser(u);
@@ -118,7 +144,8 @@ const login = async (phone, password) => {
 
   // ===== REFRESH ME (manual) =====
   const refreshMe = async () => {
-    const t = localStorage.getItem("token");
+    const ls = safeLocalStorage();
+    const t = ls?.getItem("token") || "";
     if (!t) return { ok: false, message: "No token" };
 
     const r = await api.getAuth("/api/auth/me", t);
@@ -134,14 +161,12 @@ const login = async (phone, password) => {
     return { ok: true, user: u };
   };
 
-  // ===== UPDATE ME (profile + shipping address) =====
-  // payload উদাহরণ:
-  // { fullName, gender, dateOfBirth, permanentAddress, shippingAddress: { ... } }
-  const updateMe = async (payload) => {
-    const t = localStorage.getItem("token");
+  // ===== UPDATE ME =====
+  const updateMe = async (payload: any) => {
+    const ls = safeLocalStorage();
+    const t = ls?.getItem("token") || "";
     if (!t) return { ok: false, message: "No token" };
 
-    // ✅ FIX: putAuth(path, token, body) — তোমারটা উল্টা ছিল
     const r = await api.putAuth("/api/auth/me", t, payload);
     if (!r?.ok) return r;
 
@@ -155,43 +180,40 @@ const login = async (phone, password) => {
     return { ok: true, user: u };
   };
 
-  // ===== RESET PASSWORD (phone + fullName match) =====
-  // Backend এ route লাগবে: POST /api/auth/reset-password
-  // body: { phone, fullName, newPassword }
-  const resetPassword = async (phone, fullName, newPassword) => {
-    const r = await api.post("/api/auth/reset-password", { phone, fullName, newPassword });
-    return r; // {ok:true} বা {ok:false,message}
+  // ===== RESET PASSWORD =====
+  const resetPassword = async (phone: string, fullName: string, newPassword: string) => {
+    return api.post("/api/auth/reset-password", { phone, fullName, newPassword });
   };
 
   // ===== LOGOUT =====
   const logout = () => {
-    localStorage.removeItem("token");
+    const ls = safeLocalStorage();
+    ls?.removeItem("token");
     setUser(null);
     setBooting(false);
 
-    // ✅ guest mode -> badge 0
     cart?.useUserCart?.("");
     fav?.useUserFav?.("");
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        booting,
-        login,
-        register,
-        logout,
-        refreshMe,
-        updateMe,
-        resetPassword,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value: AuthContextValue = useMemo(
+    () => ({
+      user,
+      booting,
+      login,
+      register,
+      logout,
+      refreshMe,
+      updateMe,
+      resetPassword,
+    }),
+    [user, booting]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  // ✅ build/prerender safe: null হলে empty object ফেরত
+  return useContext(AuthContext) || ({} as AuthContextValue);
 }
