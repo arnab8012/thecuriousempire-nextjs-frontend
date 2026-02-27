@@ -20,7 +20,7 @@ function safeText(v: any) {
   return String(v ?? "").trim();
 }
 
-function safeArray(v: any) {
+function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
 
@@ -28,7 +28,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
   const router = useRouter();
 
   // ✅ useCart না থাকলেও crash না করার জন্য safe fallback
-  const cart = useCart?.() as any;
+  const cart = (typeof useCart === "function" ? (useCart() as any) : null) as any;
   const add = cart?.add || (() => {});
   const buyNow = cart?.buyNow || (() => {});
 
@@ -44,6 +44,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
   // ✅ product fetch
   useEffect(() => {
     let alive = true;
+
     if (!id) {
       setErr("Missing product id");
       setLoading(false);
@@ -71,7 +72,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
           setErr(r?.message || "Product not found");
           setP(null);
         }
-      } catch (e: any) {
+      } catch {
         if (!alive) return;
         setErr("Network/API error (product load failed)");
         setP(null);
@@ -87,11 +88,13 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
   }, [id]);
 
   const imgs = useMemo(() => {
-    const arr = safeArray(p?.images).filter(Boolean);
-    return arr.length ? arr : [p?.image].filter(Boolean);
+    const arr = safeArray<string>(p?.images).filter(Boolean);
+    const alt = [p?.image].filter(Boolean).map(String);
+    const list = arr.length ? arr : alt;
+    return list.length ? list : [FALLBACK_IMG];
   }, [p?.images, p?.image]);
 
-  // ✅ auto slide (optional)
+  // ✅ auto slide
   useEffect(() => {
     if (imgs.length <= 1) return;
     const t = setInterval(() => setIdx((x) => (x + 1) % imgs.length), 3000);
@@ -100,15 +103,21 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
   const mainImg = imgs[idx] || FALLBACK_IMG;
 
-  const variants = safeArray(p?.variants);
+  const variants = safeArray<any>(p?.variants);
   const selectedVar = variants.find((v: any) => String(v?.name) === String(variant));
   const availableStock = toNum(selectedVar?.stock ?? variants?.[0]?.stock ?? 0, 0);
-  const canBuy = availableStock > 0 && qty <= availableStock;
+  const canBuy = availableStock > 0 ? qty <= availableStock : true; // stock field না থাকলেও কিনতে দেবে
 
   const showToast = (msg: string) => {
     setToast(msg);
-    window.clearTimeout((window as any).__pd_toast_t);
-    (window as any).__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
+
+    // ✅ window guard (crash avoid)
+    if (typeof window === "undefined") return;
+
+    try {
+      window.clearTimeout((window as any).__pd_toast_t);
+      (window as any).__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
+    } catch {}
   };
 
   if (loading) return <div className="container" style={{ padding: 16 }}>Loading...</div>;
@@ -127,13 +136,16 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
   if (!p) return <div className="container" style={{ padding: 16 }}>No product.</div>;
 
+  // ✅ productId fallback (_id/id)
+  const productId = String(p?._id ?? p?.id ?? id ?? "");
+
   const cartItem = {
-    productId: p._id,
-    title: p.title,
+    productId,
+    title: p?.title,
     image: imgs[0] || mainImg,
-    variant,
+    variant: variant || "",
     qty,
-    price: p.price,
+    price: p?.price,
   };
 
   return (
@@ -145,7 +157,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <img
               className="pdImg"
               src={mainImg}
-              alt={safeText(p.title) || "Product"}
+              alt={safeText(p?.title) || "Product"}
               style={{ width: "100%", borderRadius: 14 }}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
@@ -224,7 +236,8 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
                     height="60"
                     style={{ objectFit: "cover", borderRadius: 10 }}
                     onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = "https://via.placeholder.com/78x60?text=Img";
+                      (e.currentTarget as HTMLImageElement).src =
+                        "https://via.placeholder.com/78x60?text=Img";
                     }}
                   />
                 </button>
@@ -254,22 +267,22 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             </div>
           ) : null}
 
-          <h2>{p.title}</h2>
+          <h2>{p?.title}</h2>
 
           <div className="priceRow">
-            <span className="price">৳ {p.price}</span>
-            {p.compareAtPrice ? <span className="cut">৳ {p.compareAtPrice}</span> : null}
+            <span className="price">৳ {p?.price}</span>
+            {p?.compareAtPrice ? <span className="cut">৳ {p?.compareAtPrice}</span> : null}
           </div>
 
-          <div className="muted">Delivery time: {p.deliveryDays}</div>
+          <div className="muted">Delivery time: {p?.deliveryDays}</div>
 
           {variants.length ? (
             <div className="box">
               <div className="lbl">Available variant:</div>
               <select value={variant} onChange={(e) => setVariant(e.target.value)} className="input">
                 {variants.map((v: any, i: number) => (
-                  <option key={String(v?.name || i)} value={v.name}>
-                    {v.name} (Stock: {toNum(v.stock, 0)})
+                  <option key={String(v?.name || i)} value={v?.name}>
+                    {v?.name} (Stock: {toNum(v?.stock, 0)})
                   </option>
                 ))}
               </select>
@@ -324,7 +337,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <button
               className="btnPinkFull"
               onClick={() => {
-                if (!canBuy) {
+                if (availableStock > 0 && !canBuy) {
                   showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
                   return;
                 }
@@ -332,7 +345,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
                 showToast("Added to cart");
               }}
               type="button"
-              disabled={!canBuy}
+              disabled={availableStock > 0 ? !canBuy : false}
             >
               Add to Cart
             </button>
@@ -340,27 +353,27 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <button
               className="btnDarkFull"
               onClick={() => {
-                if (!canBuy) {
+                if (availableStock > 0 && !canBuy) {
                   showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
                   return;
                 }
-                buyNow(p, variant, qty);
+                buyNow(p, variant || "", qty);
                 router.push("/checkout?mode=buy");
               }}
               type="button"
-              disabled={!canBuy}
+              disabled={availableStock > 0 ? !canBuy : false}
             >
               Buy Now
             </button>
 
-            {availableStock <= 0 ? (
+            {availableStock <= 0 && variants.length ? (
               <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>Stock Out</div>
             ) : null}
           </div>
 
           <div className="box">
             <h4>Description</h4>
-            <p className="product-description muted">{p.description || "No description yet."}</p>
+            <p className="product-description muted">{p?.description || "No description yet."}</p>
           </div>
         </div>
       </div>
