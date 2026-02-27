@@ -34,27 +34,25 @@ function safeJsonParse<T>(text: string | null, fallback: T): T {
   }
 }
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  return safeJsonParse<T>(localStorage.getItem(key), fallback);
-}
-
-function saveToStorage<T>(key: string, val: T) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(val));
-}
-
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
 
   useEffect(() => {
-    setItems(loadFromStorage<CartItem[]>(CART_KEY, []));
-    setBuyNowItem(loadFromStorage<CartItem | null>(BUY_KEY, null));
+    if (typeof window === "undefined") return;
+    setItems(safeJsonParse<CartItem[]>(localStorage.getItem(CART_KEY), []));
+    setBuyNowItem(safeJsonParse<CartItem | null>(localStorage.getItem(BUY_KEY), null));
   }, []);
 
-  useEffect(() => saveToStorage(CART_KEY, items), [items]);
-  useEffect(() => saveToStorage(BUY_KEY, buyNowItem), [buyNowItem]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(CART_KEY, JSON.stringify(items));
+  }, [items]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(BUY_KEY, JSON.stringify(buyNowItem));
+  }, [buyNowItem]);
 
   const addToCart = (item: CartItem) => {
     setItems((prev) => {
@@ -68,10 +66,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const removeFromCart = (id: string) => setItems((prev) => prev.filter((x) => x.id !== id));
+  const removeFromCart = (id: string) => setItems((p) => p.filter((x) => x.id !== id));
 
   const setQty = (id: string, qty: number) =>
-    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, qty: Math.max(1, qty) } : x)));
+    setItems((p) => p.map((x) => (x.id === id ? { ...x, qty: Math.max(1, qty) } : x)));
 
   const clearCart = () => setItems([]);
 
@@ -79,16 +77,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearBuyNow = () => setBuyNowItem(null);
 
   const value = useMemo<CartCtx>(
-    () => ({
-      items,
-      buyNowItem,
-      addToCart,
-      removeFromCart,
-      setQty,
-      clearCart,
-      setBuyNow,
-      clearBuyNow,
-    }),
+    () => ({ items, buyNowItem, addToCart, removeFromCart, setQty, clearCart, setBuyNow, clearBuyNow }),
     [items, buyNowItem]
   );
 
