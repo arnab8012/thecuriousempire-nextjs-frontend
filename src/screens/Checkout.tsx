@@ -112,7 +112,11 @@ export default function Checkout() {
 
   // ✅ guards
   useEffect(() => {
-    if (!token) router.replace("/login?next=" + encodeURIComponent("/checkout" + (sp.toString() ? `?${sp.toString()}` : "")));
+    if (!token)
+      router.replace(
+        "/login?next=" +
+          encodeURIComponent("/checkout" + (sp.toString() ? `?${sp.toString()}` : ""))
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -189,8 +193,9 @@ export default function Checkout() {
         division: found.division || "Dhaka",
       });
     }
+    // ✅ FIX: saved dependency add (তোমার কোড বাদ না দিয়ে শুধু fix)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, useNew]);
+  }, [selectedId, useNew, saved]);
 
   // ✅ validate
   const validateShipping = () => {
@@ -216,7 +221,8 @@ export default function Checkout() {
     return await api.postAuth("/api/auth/shipping", token, {
       ...ship,
       label: ship.label || makeLabel(ship),
-      setDefault: true,
+      // ✅ FIX: setDefault বাদ, backend-compatible
+      isDefault: true,
     });
   };
 
@@ -225,7 +231,8 @@ export default function Checkout() {
     return await api.putAuth(`/api/auth/shipping/${id}`, token, {
       ...ship,
       label: ship.label || makeLabel(ship),
-      setDefault: true,
+      // ✅ FIX: setDefault বাদ, backend-compatible
+      isDefault: true,
     });
   };
 
@@ -241,7 +248,6 @@ export default function Checkout() {
 
     setLoading(true);
     try {
-      // update existing (when not useNew + selectedId exists)
       const r =
         !useNew && selectedId
           ? await updateAddressInDB(selectedId, shipping)
@@ -252,14 +258,12 @@ export default function Checkout() {
         return;
       }
 
-      // refresh local list from response.user
       const list: SavedAddress[] = Array.isArray(r.user?.shippingAddresses)
         ? r.user.shippingAddresses
         : [];
 
       setSaved(list);
 
-      // choose default or last created
       const def = list.find((x) => x.isDefault) || list[0];
       if (def?._id) {
         setSelectedId(def._id);
@@ -295,7 +299,16 @@ export default function Checkout() {
         return;
       }
 
-      // reload me for updated list
+      // ✅ guard: token না থাকলে আর fetch করবে না
+      if (!token) {
+        setSaved([]);
+        setSelectedId("");
+        setUseNew(true);
+        setShipping(emptyShipping(user));
+        show("Deleted ✅");
+        return;
+      }
+
       const me = await api.getAuth("/api/auth/me", token);
       const list: SavedAddress[] = Array.isArray(me?.user?.shippingAddresses)
         ? me.user.shippingAddresses
@@ -331,7 +344,6 @@ export default function Checkout() {
 
     setLoading(true);
     try {
-      // ✅ ensure address saved in DB before order (multi-device)
       const r =
         !useNew && selectedId
           ? await updateAddressInDB(selectedId, shipping)
@@ -342,13 +354,11 @@ export default function Checkout() {
         return;
       }
 
-      // ✅ payload: old vite style
       const payload = {
         items: orderItems.map((x: any) => ({
           productId: x.productId,
           qty: x.qty,
           variant: x.variant || "",
-          // (optional extras - safe)
           title: x.title,
           price: x.price,
           image: x.image,
@@ -364,14 +374,12 @@ export default function Checkout() {
         mode: buyMode ? "buy" : "cart",
       };
 
-      // ✅ orders
       const or = await api.postAuth("/api/orders", token, payload);
       if (!or?.ok) {
         show(or?.message || "Order failed");
         return;
       }
 
-      // ✅ clear cart
       if (buyMode) cart?.clearBuyNow?.();
       else cart?.clear?.();
 
@@ -382,7 +390,6 @@ export default function Checkout() {
     }
   };
 
-  // ✅ UI
   return (
     <div className="container" style={{ paddingBottom: 140 }}>
       {msg ? (
@@ -537,7 +544,15 @@ export default function Checkout() {
           onChange={(e) => setShipping({ ...shipping, note: e.target.value })}
         />
 
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            marginTop: 10,
+            flexWrap: "wrap",
+          }}
+        >
           <button type="button" className="btnGhost" onClick={saveAndUse} disabled={loading}>
             {loading ? "Saving..." : "Save & Use"}
           </button>
@@ -586,12 +601,22 @@ export default function Checkout() {
           </label>
 
           <label className="radio">
-            <input type="radio" checked={paymentMethod === "COD"} onChange={() => setPaymentMethod("COD")} />
+            <input
+              type="radio"
+              checked={paymentMethod === "COD"}
+              onChange={() => setPaymentMethod("COD")}
+            />
             Cash On Delivery
           </label>
         </div>
 
-        <button className="btnPinkFull" type="button" onClick={placeOrder} style={{ marginTop: 12 }} disabled={loading}>
+        <button
+          className="btnPinkFull"
+          type="button"
+          onClick={placeOrder}
+          style={{ marginTop: 12 }}
+          disabled={loading}
+        >
           {loading ? "Processing..." : "অর্ডার নিশ্চিত করুন"}
         </button>
       </div>
