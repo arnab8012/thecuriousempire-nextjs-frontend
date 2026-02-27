@@ -60,8 +60,45 @@ export default function Checkout() {
     }
   }, [items.length, router]);
 
+  // ✅ AUTO LOAD shipping from server (user.shipping)
+  useEffect(() => {
+    let alive = true;
+
+    const loadShipping = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const r = await api.getAuth("/api/auth/me", token);
+        if (!alive) return;
+
+        // ✅ you said before it was saved on server, we assume user.shipping exists
+        const s = r?.ok ? r?.user?.shipping : null;
+
+        if (s) {
+          setName(String(s.customerName || s.fullName || "").trim());
+          setPhone(String(s.phone || "").trim());
+          setDistrict(String(s.district || "").trim());
+          setThana(String(s.thana || "").trim());
+          setAddress(String(s.address || "").trim());
+          setNote(String(s.note || "").trim());
+        }
+      } catch {
+        // ignore (no crash)
+      }
+    };
+
+    loadShipping();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const total = useMemo(() => {
-    return items.reduce((s: number, x: any) => s + Number(x?.price || 0) * Number(x?.qty || 0), 0);
+    return items.reduce(
+      (s: number, x: any) => s + Number(x?.price || 0) * Number(x?.qty || 0),
+      0
+    );
   }, [items]);
 
   const show = (t: string) => {
@@ -76,7 +113,6 @@ export default function Checkout() {
   const submit = async () => {
     const token = getToken();
     if (!token) {
-      // ✅ আগের alert("No token") এর বদলে login এ পাঠাবে
       router.push(`/login?next=${encodeURIComponent(nextUrl)}`);
       return;
     }
@@ -115,19 +151,27 @@ export default function Checkout() {
     try {
       setLoading(true);
 
-      // ✅ তোমার api wrapper এ যদি postAuth থাকে, এটা ব্যবহার করো:
-      // const r = await api.postAuth("/api/orders", token, payload);
-
-      // ✅ যদি না থাকে, তাহলে api.post এর ভিতর headers সাপোর্ট থাকলে:
-      const r =
-        typeof api.postAuth === "function"
-          ? await api.postAuth("/api/orders", token, payload)
-          : await api.post("/api/orders", payload, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
+      // ✅ place order (token required)
+      const r = await api.postAuth("/api/orders", token, payload);
 
       if (r?.ok) {
         show("Order placed ✅");
+
+        // ✅ Save shipping to server profile (so next time any device auto fill)
+        try {
+          await api.putAuth("/api/auth/me", token, {
+            shipping: {
+              customerName: name.trim(),
+              phone: phone.trim(),
+              district: district.trim(),
+              thana: thana.trim(),
+              address: address.trim(),
+              note: note.trim(),
+            },
+          });
+        } catch {
+          // ignore if backend doesn't support shipping save
+        }
 
         // cart clear
         if (mode === "buy") {
@@ -150,14 +194,25 @@ export default function Checkout() {
   return (
     <div className="container" style={{ paddingBottom: 140 }}>
       {msg ? (
-        <div style={{ position: "sticky", top: 8, zIndex: 10, background: "rgba(0,0,0,0.75)", color: "#fff", padding: "10px 12px", borderRadius: 12, width: "fit-content", fontWeight: 800 }}>
+        <div
+          style={{
+            position: "sticky",
+            top: 8,
+            zIndex: 10,
+            background: "rgba(0,0,0,0.75)",
+            color: "#fff",
+            padding: "10px 12px",
+            borderRadius: 12,
+            width: "fit-content",
+            fontWeight: 800,
+          }}
+        >
           {msg}
         </div>
       ) : null}
 
       <h2 style={{ marginTop: 10 }}>Checkout</h2>
 
-      {/* তোমার UI input class গুলো 그대로 রাখলাম */}
       <div className="box">
         <div className="lbl">নাম</div>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
