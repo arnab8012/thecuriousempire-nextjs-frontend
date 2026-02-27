@@ -1,7 +1,14 @@
 "use client";
 
-import { useParams as useNextParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export function useParams<T extends Record<string, string>>() {
-  return useNextParams() as unknown as T;
+  const sp = useSearchParams();
+  const out: Record<string, string> = {};
+
+  sp.forEach((v, k) => {
+    out[k] = v;
+  });
+
+  return out as T;
 }
