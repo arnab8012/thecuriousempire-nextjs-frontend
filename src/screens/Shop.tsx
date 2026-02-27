@@ -7,6 +7,14 @@ import { api } from "../api/api";
 import ProductCard from "../components/ProductCard";
 import { Helmet } from "react-helmet-async";
 
+function safeArray<T = any>(v: any): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function pid(p: any) {
+  return String(p?._id ?? p?.id ?? p?.slug ?? "");
+}
+
 export default function Shop() {
   const { search } = useLocation();
   const params = useMemo(() => new URLSearchParams(search), [search]);
@@ -14,7 +22,7 @@ export default function Shop() {
   const category = params.get("category") || "";
   const q = (params.get("q") || "").trim();
 
-  const [all, setAll] = useState([]);
+  const [all, setAll] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchErr, setFetchErr] = useState("");
   const [limit, setLimit] = useState(12);
@@ -35,8 +43,9 @@ export default function Shop() {
         if (!alive) return;
 
         if (r?.ok) {
-          const items = Array.isArray(r.products) ? r.products : [];
+          const items = safeArray(r?.products);
           setAll(items);
+
           if (items.length === 0) {
             setFetchErr("No products available right now. Please check back soon.");
           }
@@ -44,7 +53,7 @@ export default function Shop() {
           setAll([]);
           setFetchErr(r?.message || "Could not load products. Please try again.");
         }
-      } catch (e) {
+      } catch (e: any) {
         if (alive) {
           setAll([]);
           setFetchErr(e?.message || "Network error. Please try again.");
@@ -60,10 +69,12 @@ export default function Shop() {
   }, [category]);
 
   const filtered = useMemo(() => {
+    const list = safeArray(all);
     const text = q.toLowerCase();
-    if (!text) return all;
 
-    return (all || []).filter((p) => {
+    if (!text) return list;
+
+    return list.filter((p) => {
       const title = String(p?.title || "").toLowerCase();
       const desc = String(p?.description || "").toLowerCase();
       const catName = String(p?.category?.name || "").toLowerCase();
@@ -157,18 +168,15 @@ export default function Shop() {
         ) : (
           <>
             <div className="homeTwoGrid">
-  {visible.map((p) => (
-    <ProductCard key={p._id} p={p} />
-  ))}
-</div>
+              {visible.map((p) => {
+                const id = pid(p);
+                return <ProductCard key={id || JSON.stringify(p)} p={p} />;
+              })}
+            </div>
 
             {canMore ? (
               <div className="shopMoreWrap">
-                <button
-                  className="btnPrimary"
-                  type="button"
-                  onClick={() => setLimit((x) => x + 12)}
-                >
+                <button className="btnPrimary" type="button" onClick={() => setLimit((x) => x + 12)}>
                   See more
                 </button>
               </div>
