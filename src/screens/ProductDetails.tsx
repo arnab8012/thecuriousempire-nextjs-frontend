@@ -27,10 +27,10 @@ function safeArray<T = any>(v: any): T[] {
 export default function ProductDetails({ id }: ProductDetailsProps) {
   const router = useRouter();
 
-  // ✅ useCart না থাকলেও crash না করার জন্য safe fallback
-  const cart = (typeof useCart === "function" ? (useCart() as any) : null) as any;
-  const add = cart?.add || (() => {});
-  const buyNow = cart?.buyNow || (() => {});
+  // ✅ Hook must be called normally (no condition)
+  const cart = useCart() as any;
+  const add = cart?.add;
+  const buyNow = cart?.buyNow;
 
   const [p, setP] = useState<any>(null);
   const [err, setErr] = useState("");
@@ -40,6 +40,15 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
   const [variant, setVariant] = useState("");
   const [qty, setQty] = useState(1);
   const [toast, setToast] = useState("");
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    if (typeof window === "undefined") return;
+    try {
+      window.clearTimeout((window as any).__pd_toast_t);
+      (window as any).__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
+    } catch {}
+  };
 
   // ✅ product fetch
   useEffect(() => {
@@ -106,19 +115,10 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
   const variants = safeArray<any>(p?.variants);
   const selectedVar = variants.find((v: any) => String(v?.name) === String(variant));
   const availableStock = toNum(selectedVar?.stock ?? variants?.[0]?.stock ?? 0, 0);
-  const canBuy = availableStock > 0 ? qty <= availableStock : true; // stock field না থাকলেও কিনতে দেবে
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-
-    // ✅ window guard (crash avoid)
-    if (typeof window === "undefined") return;
-
-    try {
-      window.clearTimeout((window as any).__pd_toast_t);
-      (window as any).__pd_toast_t = window.setTimeout(() => setToast(""), 1200);
-    } catch {}
-  };
+  // ✅ যদি stock ফিল্ড না থাকে => block করবে না
+  const hasStock = variants.length > 0; // তোমার সিস্টেমে variant থাকলেই stock ধরছি
+  const canBuy = !hasStock ? true : availableStock > 0 && qty <= availableStock;
 
   if (loading) return <div className="container" style={{ padding: 16 }}>Loading...</div>;
 
@@ -136,7 +136,6 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
 
   if (!p) return <div className="container" style={{ padding: 16 }}>No product.</div>;
 
-  // ✅ productId fallback (_id/id)
   const productId = String(p?._id ?? p?.id ?? id ?? "");
 
   const cartItem = {
@@ -146,6 +145,15 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
     variant: variant || "",
     qty,
     price: p?.price,
+  };
+
+  const requireTokenOrGoLogin = (nextUrl: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+    if (!token) {
+      router.push(`/login?next=${encodeURIComponent(nextUrl)}`);
+      return false;
+    }
+    return true;
   };
 
   return (
@@ -302,7 +310,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
                 value={qty}
                 onChange={(e) => {
                   const n = Math.max(1, Number((e.target as HTMLInputElement).value || 1));
-                  if (availableStock > 0 && n > availableStock) {
+                  if (hasStock && availableStock > 0 && n > availableStock) {
                     setQty(availableStock);
                     showToast(`Only ${availableStock} in stock`);
                     return;
@@ -319,7 +327,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
                 onClick={() =>
                   setQty((q) => {
                     const nextQty = q + 1;
-                    if (availableStock > 0 && nextQty > availableStock) {
+                    if (hasStock && availableStock > 0 && nextQty > availableStock) {
                       showToast(`Only ${availableStock} in stock`);
                       return q;
                     }
@@ -337,15 +345,19 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <button
               className="btnPinkFull"
               onClick={() => {
-                if (availableStock > 0 && !canBuy) {
+                if (hasStock && !canBuy) {
                   showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
+                  return;
+                }
+                if (typeof add !== "function") {
+                  showToast("Cart system not ready");
                   return;
                 }
                 add(cartItem);
                 showToast("Added to cart");
               }}
               type="button"
-              disabled={availableStock > 0 ? !canBuy : false}
+              disabled={hasStock ? !canBuy : false}
             >
               Add to Cart
             </button>
@@ -353,20 +365,28 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
             <button
               className="btnDarkFull"
               onClick={() => {
-                if (availableStock > 0 && !canBuy) {
+                // ✅ token না থাকলে checkout এ পাঠাবে না
+                if (!requireTokenOrGoLogin("/checkout?mode=buy")) return;
+
+                if (hasStock && !canBuy) {
                   showToast(availableStock <= 0 ? "Stock Out" : `Only ${availableStock} in stock`);
                   return;
                 }
+                if (typeof buyNow !== "function") {
+                  showToast("Cart system not ready");
+                  return;
+                }
+
                 buyNow(p, variant || "", qty);
                 router.push("/checkout?mode=buy");
               }}
               type="button"
-              disabled={availableStock > 0 ? !canBuy : false}
+              disabled={hasStock ? !canBuy : false}
             >
               Buy Now
             </button>
 
-            {availableStock <= 0 && variants.length ? (
+            {hasStock && availableStock <= 0 ? (
               <div style={{ marginTop: 10, fontWeight: 900, color: "#b91c1c" }}>Stock Out</div>
             ) : null}
           </div>
