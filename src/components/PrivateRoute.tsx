@@ -1,22 +1,31 @@
 "use client";
 
-import Navigate from "@/components/Navigate";
-import { useLocation } from "@/utils/useLocation";
-import { useAuth } from "../context/AuthContext";
-import { api } from "../api/api";
+import { useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
-export default function PrivateRoute({ children }) {
+export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
   const { user, booting } = useAuth();
-  const loc = useLocation();
 
-  // ✅ boot চলছে → redirect না
-  if (booting) return <div className="softBox">Loading...</div>;
+  useEffect(() => {
+    if (booting) return;
 
-  // ✅ token নাই বা user নাই → login
-  const t = api.token();
-  if (!t || !user) {
-    return <Navigate to="/login" replace />;
-  }
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+    const qs = sp?.toString() ? `?${sp.toString()}` : "";
+    const next = `${pathname || "/"}${qs}`;
 
-  return children;
+    if (!token || !user) {
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+    }
+  }, [booting, user, router, pathname, sp]);
+
+  if (booting) return null;
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+  if (!token || !user) return null;
+
+  return <>{children}</>;
 }
