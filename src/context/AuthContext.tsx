@@ -20,20 +20,14 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-type CartContextType = {
-  useUserCart?: (uid: string) => void;
-};
-
-type FavoritesContextType = {
-  useUserFav?: (uid: string) => void;
-};
+type CartContextType = { useUserCart?: (uid: string) => void };
+type FavoritesContextType = { useUserFav?: (uid: string) => void };
 
 function getUid(u: any) {
   return u?._id || u?.id || u?.phone || u?.email || "";
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // ✅ Safe: provider না থাকলে null হতে পারে
   const cart = (useCart() as unknown as CartContextType) || null;
   const fav = (useFavorites() as unknown as FavoritesContextType) || null;
 
@@ -55,8 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (alive) {
             setUser(null);
             setBooting(false);
-
-            // ✅ guest mode
             cart?.useUserCart?.("");
             fav?.useUserFav?.("");
           }
@@ -76,7 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           ls?.removeItem("token");
           setUser(null);
-
           cart?.useUserCart?.("");
           fav?.useUserFav?.("");
         }
@@ -85,7 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const ls = safeLocalStorage();
           ls?.removeItem("token");
           setUser(null);
-
           cart?.useUserCart?.("");
           fav?.useUserFav?.("");
         }
@@ -106,10 +96,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!r?.ok) return r;
 
     const ls = safeLocalStorage();
-    ls?.setItem("token", r.token);
+    if (r?.token) ls?.setItem("token", r.token); // ✅ safe
+    else ls?.removeItem("token");
+
+    const token = r?.token || (ls?.getItem("token") || "");
 
     // ✅ DB থেকে fresh user
-    const me = await api.getAuth("/api/auth/me", r.token);
+    const me = token ? await api.getAuth("/api/auth/me", token) : null;
     const u = me?.ok ? me.user : r.user || null;
 
     setUser(u);
@@ -129,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!r?.ok) return r;
 
     const ls = safeLocalStorage();
-    if (r.token) ls?.setItem("token", r.token);
+    if (r?.token) ls?.setItem("token", r.token); // ✅ safe
 
     const u = r.user || null;
     setUser(u);
@@ -142,7 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, user: u };
   };
 
-  // ===== REFRESH ME (manual) =====
   const refreshMe = async () => {
     const ls = safeLocalStorage();
     const t = ls?.getItem("token") || "";
@@ -161,7 +153,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, user: u };
   };
 
-  // ===== UPDATE ME =====
   const updateMe = async (payload: any) => {
     const ls = safeLocalStorage();
     const t = ls?.getItem("token") || "";
@@ -180,12 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, user: u };
   };
 
-  // ===== RESET PASSWORD =====
   const resetPassword = async (phone: string, fullName: string, newPassword: string) => {
     return api.post("/api/auth/reset-password", { phone, fullName, newPassword });
   };
 
-  // ===== LOGOUT =====
   const logout = () => {
     const ls = safeLocalStorage();
     ls?.removeItem("token");
@@ -214,6 +203,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  // ✅ build/prerender safe: null হলে empty object ফেরত
   return useContext(AuthContext) || ({} as AuthContextValue);
 }
