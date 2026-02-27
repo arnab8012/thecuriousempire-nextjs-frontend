@@ -5,7 +5,7 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 async function request(path: string, options: RequestInit = {}) {
   try {
     const res = await fetch(`${BASE}${path}`, {
-      // ✅ CORS সহজ করার জন্য default omit
+      // ✅ CORS friendly (cookie না লাগলে omit রাখো)
       credentials: options.credentials ?? "omit",
       headers: {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
@@ -23,19 +23,19 @@ async function request(path: string, options: RequestInit = {}) {
       data = { ok: false, message: text };
     }
 
-    // ✅ non-2xx হলেও crash না করে ok:false দিয়ে দেবে
+    // ✅ 4xx/5xx হলে crash না করে ok:false রিটার্ন
     if (!res.ok) {
       return {
         ok: false,
         status: res.status,
         message: data?.message || res.statusText || "Request failed",
-        data,
+        ...data,
       };
     }
 
     return data;
   } catch (err: any) {
-    // ✅ fetch/CORS/network error হলে crash না করে fallback
+    // ✅ fetch/CORS/network error হলেও crash হবে না
     return {
       ok: false,
       message: err?.message || "Network/CORS error",
@@ -44,28 +44,21 @@ async function request(path: string, options: RequestInit = {}) {
 }
 
 export const api = {
+  BASE,
+
   get: (path: string) => request(path, { method: "GET" }),
 
   post: (path: string, body?: any) =>
-    request(path, {
-      method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
-    }),
+    request(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
 
   put: (path: string, body?: any) =>
-    request(path, {
-      method: "PUT",
-      body: body ? JSON.stringify(body) : undefined,
-    }),
+    request(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
 
   delete: (path: string) => request(path, { method: "DELETE" }),
 
-  // 🔐 With token (Authorization header)
+  // token calls
   getAuth: (path: string, token: string) =>
-    request(path, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+    request(path, { method: "GET", headers: { Authorization: `Bearer ${token}` } }),
 
   postAuth: (path: string, token: string, body?: any) =>
     request(path, {
@@ -82,8 +75,5 @@ export const api = {
     }),
 
   deleteAuth: (path: string, token: string) =>
-    request(path, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+    request(path, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }),
 };
