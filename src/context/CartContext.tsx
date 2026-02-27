@@ -1,195 +1,144 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 
-type CartItem = {
-  productId: string;
-  title: string;
-  price: number;
-  image: string;
-  variant?: string;
-  qty: number;
-};
-
-type CartContextValue = {
-  items: CartItem[];
-  add: (item: CartItem) => void;
-  inc: (productId: string, variant?: string) => void;
-  dec: (productId: string, variant?: string) => void;
-  remove: (productId: string, variant?: string) => void;
-  clear: () => void;
-  cartCount: number;
-
-  buyNow: (product: any, variant?: string, qty?: number) => void;
-  checkoutItem: CartItem | null;
-  clearBuyNow: () => void;
-
-  // Optional (AuthContext call করছে)
-  useUserCart?: (uid: string) => void;
-};
-
-const CartContext = createContext<CartContextValue | null>(null);
+const CartContext = createContext<any>(null);
 
 const CART_KEY = "cart_items_v1";
 const BUY_KEY = "buy_now_item_v1";
 
-function safeParse(raw: string, fallback: any) {
+function safeGet(key: string) {
+  if (typeof window === "undefined") return null;
   try {
-    const v = JSON.parse(raw);
-    return v ?? fallback;
+    return window.localStorage.getItem(key);
   } catch {
-    return fallback;
+    return null;
   }
 }
-
-function loadKey<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (safeParse(raw, fallback) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveKey(key: string, value: any) {
+function safeSet(key: string, value: string) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    window.localStorage.setItem(key, value);
+  } catch {}
+}
+function safeRemove(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(key);
   } catch {}
 }
 
+function loadCart() {
+  try {
+    const raw = safeGet(CART_KEY) || "[]";
+    const j = JSON.parse(raw);
+    return Array.isArray(j) ? j : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCart(items: any[]) {
+  safeSet(CART_KEY, JSON.stringify(items));
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    const d = loadKey<any>(CART_KEY, []);
-    return Array.isArray(d) ? d : [];
+  const [items, setItems] = useState<any[]>(() => loadCart());
+
+  const [checkoutItem, setCheckoutItem] = useState<any>(() => {
+    try {
+      const raw = safeGet(BUY_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
   });
 
-  const [checkoutItem, setCheckoutItem] = useState<CartItem | null>(() => {
-    const d = loadKey<any>(BUY_KEY, null);
-    return d && typeof d === "object" ? d : null;
-  });
-
-  // persist cart
-  useEffect(() => {
-    saveKey(CART_KEY, items);
-  }, [items]);
-
-  // persist buy item
-  useEffect(() => {
-    saveKey(BUY_KEY, checkoutItem);
-  }, [checkoutItem]);
-
-  const add = (item: CartItem) => {
-    const pid = String(item.productId || "");
-    const vname = String(item.variant || "");
-    if (!pid) return;
-
+  const add = (item: any) => {
     setItems((prev) => {
-      const i = prev.findIndex((x) => String(x.productId) === pid && String(x.variant || "") === vname);
+      const i = prev.findIndex(
+        (x) => x.productId === item.productId && String(x.variant || "") === String(item.variant || "")
+      );
+
+      let next: any[];
       if (i >= 0) {
-        const next = prev.map((x, idx) =>
-          idx === i ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 1) } : x
+        next = prev.map((x, idx) =>
+          idx === i ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) } : x
         );
-        return next;
+      } else {
+        next = [...prev, { ...item, qty: Number(item.qty || 1) }];
       }
-      return [...prev, { ...item, productId: pid, variant: vname, qty: Number(item.qty || 1) }];
+
+      saveCart(next);
+      return next;
     });
   };
 
-  const inc = (productId: string, variant = "") => {
-    const pid = String(productId || "");
-    const vname = String(variant || "");
-    if (!pid) return;
-
-    setItems((prev) =>
-      prev.map((x) =>
-        String(x.productId) === pid && String(x.variant || "") === vname ? { ...x, qty: Number(x.qty || 0) + 1 } : x
-      )
-    );
+  const inc = (productId: any, variant = "") => {
+    setItems((prev) => {
+      const next = prev.map((x) => {
+        const same =
+          String(x.productId) === String(productId) && String(x.variant || "") === String(variant || "");
+        return same ? { ...x, qty: Number(x.qty || 0) + 1 } : x;
+      });
+      saveCart(next);
+      return next;
+    });
   };
 
-  const dec = (productId: string, variant = "") => {
-    const pid = String(productId || "");
-    const vname = String(variant || "");
-    if (!pid) return;
-
-    setItems((prev) =>
-      prev.map((x) =>
-        String(x.productId) === pid && String(x.variant || "") === vname
-          ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) }
-          : x
-      )
-    );
+  const dec = (productId: any, variant = "") => {
+    setItems((prev) => {
+      const next = prev.map((x) => {
+        const same =
+          String(x.productId) === String(productId) && String(x.variant || "") === String(variant || "");
+        return same ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) } : x;
+      });
+      saveCart(next);
+      return next;
+    });
   };
 
-  const remove = (productId: string, variant = "") => {
-    const pid = String(productId || "");
-    const vname = String(variant || "");
-    if (!pid) return;
-
-    setItems((prev) => prev.filter((x) => !(String(x.productId) === pid && String(x.variant || "") === vname)));
+  const remove = (productId: any, variant = "") => {
+    setItems((prev) => {
+      const next = prev.filter(
+        (x) => !(String(x.productId) === String(productId) && String(x.variant || "") === String(variant || ""))
+      );
+      saveCart(next);
+      return next;
+    });
   };
 
   const clear = () => {
     setItems([]);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(CART_KEY);
-      } catch {}
-    }
+    safeRemove(CART_KEY);
   };
 
   const buyNow = (product: any, variant = "", qty = 1) => {
-    const pid = String(product?._id ?? product?.id ?? product?.productId ?? "");
-    if (!pid) return;
-
-    const one: CartItem = {
-      productId: pid,
-      title: String(product?.title ?? ""),
-      price: Number(product?.price ?? 0),
-      image: String(product?.images?.[0] ?? product?.image ?? "https://via.placeholder.com/300"),
-      variant: String(variant || ""),
-      qty: Math.max(1, Number(qty || 1)),
+    const one = {
+      productId: product._id,
+      title: product.title,
+      price: product.price,
+      image: product.images?.[0] || product.image || "https://via.placeholder.com/300",
+      variant,
+      qty,
     };
 
     setCheckoutItem(one);
+    safeSet(BUY_KEY, JSON.stringify(one));
   };
 
   const clearBuyNow = () => {
     setCheckoutItem(null);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(BUY_KEY);
-      } catch {}
-    }
+    safeRemove(BUY_KEY);
   };
 
-  const cartCount = useMemo(() => items.reduce((s, x) => s + (Number(x.qty || 0) || 0), 0), [items]);
+  const cartCount = useMemo(() => items.reduce((s, x) => s + (x.qty || 0), 0), [items]);
 
-  // AuthContext call করে, but currently you store 1 cart for all users. Keep as no-op for compatibility.
-  const useUserCart = (_uid: string) => {
-    // If in future you want per-user cart, implement key switching here.
-    return;
-  };
-
-  const value: CartContextValue = {
-    items,
-    add,
-    inc,
-    dec,
-    remove,
-    clear,
-    cartCount,
-    buyNow,
-    checkoutItem,
-    clearBuyNow,
-    useUserCart,
-  };
+  const value = { items, add, inc, dec, remove, clear, cartCount, buyNow, checkoutItem, clearBuyNow };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart() {
-  return useContext(CartContext) || ({} as CartContextValue);
+  return useContext(CartContext);
 }
