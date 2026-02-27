@@ -1,10 +1,10 @@
-import PrivateRoute from "@/components/PrivateRoute";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Checkout from "@/screens/Checkout";
 
 export default function Page() {
   return (
-    <PrivateRoute>
+    <ProtectedRoute>
       <Checkout />
-    </PrivateRoute>
+    </ProtectedRoute>
   );
 }
