@@ -17,23 +17,20 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit & { auth?: boolean }
 ): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  const url = path.startsWith("http")
+    ? path
+    : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const headers = new Headers(options?.headers || {});
-  headers.set("Content-Type", "application/json");
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   if (options?.auth !== false) {
     const token = getToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    cache: "no-store",
-  });
+  const res = await fetch(url, { ...options, headers, cache: "no-store" });
 
-  // Try read json safely
   const text = await res.text();
   let data: any = null;
   try {
@@ -42,10 +39,6 @@ export async function apiFetch<T>(
     data = { message: text || "Invalid response" };
   }
 
-  if (!res.ok) {
-    const msg = data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-
+  if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
   return data as T;
 }
