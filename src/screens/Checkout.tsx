@@ -68,7 +68,6 @@ export default function Checkout() {
 
   const cart = useCart() as any;
   const { user } = useAuth();
-
   const token = api.token();
 
   // ✅ order items
@@ -112,7 +111,10 @@ export default function Checkout() {
 
   // ✅ guards
   useEffect(() => {
-    if (!token) router.replace("/login?next=" + encodeURIComponent("/checkout" + (sp.toString() ? `?${sp.toString()}` : "")));
+    if (!token) {
+      const next = "/checkout" + (sp.toString() ? `?${sp.toString()}` : "");
+      router.replace("/login?next=" + encodeURIComponent(next));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -140,7 +142,6 @@ export default function Checkout() {
 
           setSaved(list);
 
-          // pick default
           const def = list.find((x) => x?.isDefault) || list[0];
           if (def?._id) {
             setSelectedId(def._id);
@@ -151,9 +152,10 @@ export default function Checkout() {
               division: def.division || "Dhaka",
             });
           } else {
-            // fallback: if old single shippingAddress exists
+            // fallback: old single shippingAddress
             const old = r.user.shippingAddress || {};
             const hasOld = old && Object.keys(old).length > 0;
+
             if (hasOld) {
               setUseNew(false);
               setShipping({
@@ -189,8 +191,9 @@ export default function Checkout() {
         division: found.division || "Dhaka",
       });
     }
+    // ✅ IMPORTANT: saved dependency added
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, useNew]);
+  }, [selectedId, useNew, saved]);
 
   // ✅ validate
   const validateShipping = () => {
@@ -213,19 +216,21 @@ export default function Checkout() {
 
   const createAddressInDB = async (ship: Shipping) => {
     if (!token) return { ok: false, message: "No token" };
+    // ✅ FIX: backend uses isDefault, not setDefault
     return await api.postAuth("/api/auth/shipping", token, {
       ...ship,
       label: ship.label || makeLabel(ship),
-      setDefault: true,
+      isDefault: true,
     });
   };
 
   const updateAddressInDB = async (id: string, ship: Shipping) => {
     if (!token) return { ok: false, message: "No token" };
+    // ✅ FIX: backend uses isDefault, not setDefault
     return await api.putAuth(`/api/auth/shipping/${id}`, token, {
       ...ship,
       label: ship.label || makeLabel(ship),
-      setDefault: true,
+      isDefault: true,
     });
   };
 
@@ -241,7 +246,6 @@ export default function Checkout() {
 
     setLoading(true);
     try {
-      // update existing (when not useNew + selectedId exists)
       const r =
         !useNew && selectedId
           ? await updateAddressInDB(selectedId, shipping)
@@ -252,14 +256,12 @@ export default function Checkout() {
         return;
       }
 
-      // refresh local list from response.user
       const list: SavedAddress[] = Array.isArray(r.user?.shippingAddresses)
         ? r.user.shippingAddresses
         : [];
 
       setSaved(list);
 
-      // choose default or last created
       const def = list.find((x) => x.isDefault) || list[0];
       if (def?._id) {
         setSelectedId(def._id);
@@ -295,7 +297,6 @@ export default function Checkout() {
         return;
       }
 
-      // reload me for updated list
       const me = await api.getAuth("/api/auth/me", token);
       const list: SavedAddress[] = Array.isArray(me?.user?.shippingAddresses)
         ? me.user.shippingAddresses
@@ -331,7 +332,7 @@ export default function Checkout() {
 
     setLoading(true);
     try {
-      // ✅ ensure address saved in DB before order (multi-device)
+      // ensure address saved in DB
       const r =
         !useNew && selectedId
           ? await updateAddressInDB(selectedId, shipping)
@@ -342,21 +343,16 @@ export default function Checkout() {
         return;
       }
 
-      // ✅ payload: old vite style
       const payload = {
         items: orderItems.map((x: any) => ({
           productId: x.productId,
           qty: x.qty,
           variant: x.variant || "",
-          // (optional extras - safe)
           title: x.title,
           price: x.price,
           image: x.image,
         })),
-        shipping: {
-          ...shipping,
-          label: shipping.label || makeLabel(shipping),
-        },
+        shipping: { ...shipping, label: shipping.label || makeLabel(shipping) },
         paymentMethod,
         deliveryCharge,
         subTotal,
@@ -364,14 +360,12 @@ export default function Checkout() {
         mode: buyMode ? "buy" : "cart",
       };
 
-      // ✅ orders
       const or = await api.postAuth("/api/orders", token, payload);
       if (!or?.ok) {
         show(or?.message || "Order failed");
         return;
       }
 
-      // ✅ clear cart
       if (buyMode) cart?.clearBuyNow?.();
       else cart?.clear?.();
 
@@ -382,7 +376,6 @@ export default function Checkout() {
     }
   };
 
-  // ✅ UI
   return (
     <div className="container" style={{ paddingBottom: 140 }}>
       {msg ? (
@@ -405,7 +398,6 @@ export default function Checkout() {
 
       <h2 style={{ marginTop: 10 }}>Shipping Details</h2>
 
-      {/* ✅ Saved addresses */}
       {saved.length > 0 && (
         <div className="box" style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -472,35 +464,18 @@ export default function Checkout() {
         </div>
       )}
 
-      {/* ✅ Form */}
       <div className="box">
         <label className="lbl">আপনার নাম</label>
-        <input
-          className="input"
-          value={shipping.fullName}
-          onChange={(e) => setShipping({ ...shipping, fullName: e.target.value })}
-        />
+        <input className="input" value={shipping.fullName} onChange={(e) => setShipping({ ...shipping, fullName: e.target.value })} />
 
         <label className="lbl">মোবাইল নাম্বার</label>
-        <input
-          className="input"
-          value={shipping.phone1}
-          onChange={(e) => setShipping({ ...shipping, phone1: e.target.value })}
-        />
+        <input className="input" value={shipping.phone1} onChange={(e) => setShipping({ ...shipping, phone1: e.target.value })} />
 
         <label className="lbl">মোবাইল নাম্বার 2 (optional)</label>
-        <input
-          className="input"
-          value={shipping.phone2 || ""}
-          onChange={(e) => setShipping({ ...shipping, phone2: e.target.value })}
-        />
+        <input className="input" value={shipping.phone2 || ""} onChange={(e) => setShipping({ ...shipping, phone2: e.target.value })} />
 
         <label className="lbl">বিভাগ</label>
-        <select
-          className="input"
-          value={shipping.division}
-          onChange={(e) => setShipping({ ...shipping, division: e.target.value })}
-        >
+        <select className="input" value={shipping.division} onChange={(e) => setShipping({ ...shipping, division: e.target.value })}>
           {DIVISIONS.map((d) => (
             <option key={d} value={d}>
               {d}
@@ -509,33 +484,16 @@ export default function Checkout() {
         </select>
 
         <label className="lbl">জেলা</label>
-        <input
-          className="input"
-          value={shipping.district}
-          onChange={(e) => setShipping({ ...shipping, district: e.target.value })}
-        />
+        <input className="input" value={shipping.district} onChange={(e) => setShipping({ ...shipping, district: e.target.value })} />
 
         <label className="lbl">উপজেলা/থানা</label>
-        <input
-          className="input"
-          value={shipping.upazila}
-          onChange={(e) => setShipping({ ...shipping, upazila: e.target.value })}
-        />
+        <input className="input" value={shipping.upazila} onChange={(e) => setShipping({ ...shipping, upazila: e.target.value })} />
 
         <label className="lbl">সম্পূর্ণ ঠিকানা (থানা সহ লিখে দিবেন)</label>
-        <input
-          className="input"
-          value={shipping.addressLine}
-          onChange={(e) => setShipping({ ...shipping, addressLine: e.target.value })}
-        />
+        <input className="input" value={shipping.addressLine} onChange={(e) => setShipping({ ...shipping, addressLine: e.target.value })} />
 
         <label className="lbl">অর্ডার নোট (Optional)</label>
-        <textarea
-          className="input"
-          rows={3}
-          value={shipping.note || ""}
-          onChange={(e) => setShipping({ ...shipping, note: e.target.value })}
-        />
+        <textarea className="input" rows={3} value={shipping.note || ""} onChange={(e) => setShipping({ ...shipping, note: e.target.value })} />
 
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
           <button type="button" className="btnGhost" onClick={saveAndUse} disabled={loading}>
@@ -558,7 +516,6 @@ export default function Checkout() {
           )}
         </div>
 
-        {/* totals */}
         <div className="box" style={{ marginTop: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>Sub Total:</span>
@@ -574,14 +531,9 @@ export default function Checkout() {
           </div>
         </div>
 
-        {/* payment */}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 10 }}>
           <label className="radio">
-            <input
-              type="radio"
-              checked={paymentMethod === "FULL_PAYMENT"}
-              onChange={() => setPaymentMethod("FULL_PAYMENT")}
-            />
+            <input type="radio" checked={paymentMethod === "FULL_PAYMENT"} onChange={() => setPaymentMethod("FULL_PAYMENT")} />
             Full Payment
           </label>
 
