@@ -259,8 +259,14 @@ export default function Checkout() {
       }
 
       const list: SavedAddress[] = Array.isArray(r.user?.shippingAddresses)
-        ? r.user.shippingAddresses
-        : [];
+  ? r.user.shippingAddresses
+  : Array.isArray(r.user?.shipping_addresses)
+  ? r.user.shipping_addresses
+  : Array.isArray(r.user?.items)
+  ? r.user.items
+  : Array.isArray(r?.items)
+  ? r.items
+  : [];
 
       setSaved(list);
 
