@@ -21,11 +21,8 @@ export default function Checkout() {
   const mode = sp.get("mode") || ""; // buy / cart
   const cart = useCart() as any;
 
-  // cart items / buy-now item
   const items = useMemo(() => {
-    if (mode === "buy") {
-      return cart?.checkoutItem ? [cart.checkoutItem] : [];
-    }
+    if (mode === "buy") return cart?.checkoutItem ? [cart.checkoutItem] : [];
     return Array.isArray(cart?.items) ? cart.items : [];
   }, [mode, cart?.items, cart?.checkoutItem]);
 
@@ -45,27 +42,34 @@ export default function Checkout() {
     return `/checkout${q ? `?${q}` : ""}`;
   }, [sp]);
 
-  const show = (t: string) => {
-    setMsg(t);
-    if (typeof window === "undefined") return;
-    try {
-      window.clearTimeout((window as any).__co_msg);
-      (window as any).__co_msg = window.setTimeout(() => setMsg(""), 1600);
-    } catch {}
-  };
-
-  // ✅ Guard: token না থাকলে checkout এ থাকবে না
+  // ✅ Guard: token না থাকলে login
   useEffect(() => {
     const t = getToken();
     if (!t) router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
   }, [router, nextUrl]);
 
-  // ✅ Guard: items empty হলে back
+  // ✅ Guard: cart empty হলে back
   useEffect(() => {
     if (!items.length) router.replace("/cart");
   }, [items.length, router]);
 
-  // ✅ 1) LOAD SHIPPING from server (user.shippingAddress)
+  const total = useMemo(() => {
+    return items.reduce(
+      (s: number, x: any) => s + Number(x?.price || 0) * Number(x?.qty || 0),
+      0
+    );
+  }, [items]);
+
+  const show = (t: string) => {
+    setMsg(t);
+    if (typeof window === "undefined") return;
+    try {
+      window.clearTimeout((window as any).__co_msg);
+      (window as any).__co_msg = window.setTimeout(() => setMsg(""), 1500);
+    } catch {}
+  };
+
+  // ✅ LOAD saved shippingAddress from server (auto-fill)
   useEffect(() => {
     let alive = true;
 
@@ -80,7 +84,6 @@ export default function Checkout() {
         if (r?.ok && r?.user?.shippingAddress) {
           const s = r.user.shippingAddress || {};
 
-          // ✅ backend fields -> frontend fields mapping
           setName(s.fullName || "");
           setPhone(s.phone1 || s.phone2 || "");
           setDistrict(s.district || "");
@@ -89,7 +92,7 @@ export default function Checkout() {
           setNote(s.note || "");
         }
       } catch {
-        // ignore silently
+        // ignore
       }
     })();
 
@@ -98,13 +101,6 @@ export default function Checkout() {
     };
   }, []);
 
-  const total = useMemo(() => {
-    return items.reduce(
-      (s: number, x: any) => s + Number(x?.price || 0) * Number(x?.qty || 0),
-      0
-    );
-  }, [items]);
-
   const submit = async () => {
     const token = getToken();
     if (!token) {
@@ -112,13 +108,7 @@ export default function Checkout() {
       return;
     }
 
-    if (
-      !name.trim() ||
-      !phone.trim() ||
-      !district.trim() ||
-      !thana.trim() ||
-      !address.trim()
-    ) {
+    if (!name.trim() || !phone.trim() || !district.trim() || !thana.trim() || !address.trim()) {
       show("সব ফিল্ড পূরণ করুন");
       return;
     }
@@ -129,14 +119,14 @@ export default function Checkout() {
       return;
     }
 
-    const payload = {
+    const orderPayload = {
       customerName: name.trim(),
       phone: phone.trim(),
       district: district.trim(),
       thana: thana.trim(),
       address: address.trim(),
       note: note.trim(),
-      paymentMode: payMode, // "cod" | "full"
+      paymentMode: payMode,
       items: items.map((x: any) => ({
         productId: x.productId,
         title: x.title,
@@ -152,8 +142,7 @@ export default function Checkout() {
     try {
       setLoading(true);
 
-      // ✅ 2) SAVE SHIPPING to server (user.shippingAddress)
-      // backend model: shippingAddress { fullName, phone1, district, upazila, addressLine, note }
+      // ✅ SAVE shippingAddress to server (so next time auto-fill হবে)
       await api.putAuth("/api/auth/me", token, {
         shippingAddress: {
           fullName: name.trim(),
@@ -163,7 +152,7 @@ export default function Checkout() {
           addressLine: address.trim(),
           note: note.trim(),
 
-          // এগুলো তোমার UI তে নেই, তাই খালি থাকছে:
+          // UI তে নেই, তাই খালি থাকছে
           division: "",
           phone2: "",
           union: "",
@@ -171,13 +160,12 @@ export default function Checkout() {
         },
       });
 
-      // ✅ 3) PLACE ORDER
-      const r = await api.postAuth("/api/orders", token, payload);
+      // ✅ PLACE ORDER
+      const r = await api.postAuth("/api/orders", token, orderPayload);
 
       if (r?.ok) {
         show("Order placed ✅");
 
-        // cart clear
         if (mode === "buy") cart?.clearBuyNow?.();
         else cart?.clear?.();
 
