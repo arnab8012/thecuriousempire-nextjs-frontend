@@ -17,12 +17,13 @@ function getToken() {
 export default function Checkout() {
   const router = useRouter();
   const sp = useSearchParams();
-
-  const mode = sp.get("mode") || ""; // buy / cart
+  const mode = sp.get("mode") || "";
   const cart = useCart() as any;
 
   const items = useMemo(() => {
-    if (mode === "buy") return cart?.checkoutItem ? [cart.checkoutItem] : [];
+    if (mode === "buy") {
+      return cart?.checkoutItem ? [cart.checkoutItem] : [];
+    }
     return Array.isArray(cart?.items) ? cart.items : [];
   }, [mode, cart?.items, cart?.checkoutItem]);
 
@@ -42,20 +43,47 @@ export default function Checkout() {
     return `/checkout${q ? `?${q}` : ""}`;
   }, [sp]);
 
-  // ✅ Guard: token না থাকলে login
+  // ✅ token guard
   useEffect(() => {
     const t = getToken();
-    if (!t) router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
+    if (!t) {
+      router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
+    }
   }, [router, nextUrl]);
 
-  // ✅ Guard: cart empty হলে back
+  // ✅ cart guard
   useEffect(() => {
-    if (!items.length) router.replace("/cart");
+    if (!items.length) {
+      router.replace("/cart");
+    }
   }, [items.length, router]);
+
+  // ✅ LOAD SHIPPING FROM SERVER
+  useEffect(() => {
+    const loadShipping = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      const r = await api.getAuth("/api/auth/me", token);
+      if (r?.ok && r?.user?.shippingAddress) {
+        const s = r.user.shippingAddress;
+
+        setName(s.fullName || "");
+        setPhone(s.phone1 || "");
+        setDistrict(s.district || "");
+        setThana(s.upazila || "");
+        setAddress(s.addressLine || "");
+        setNote(s.note || "");
+      }
+    };
+
+    loadShipping();
+  }, []);
 
   const total = useMemo(() => {
     return items.reduce(
-      (s: number, x: any) => s + Number(x?.price || 0) * Number(x?.qty || 0),
+      (s: number, x: any) =>
+        s + Number(x?.price || 0) * Number(x?.qty || 0),
       0
     );
   }, [items]);
@@ -69,38 +97,6 @@ export default function Checkout() {
     } catch {}
   };
 
-  // ✅ LOAD saved shippingAddress from server (auto-fill)
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      const token = getToken();
-      if (!token) return;
-
-      try {
-        const r = await api.getAuth("/api/auth/me", token);
-        if (!alive) return;
-
-        if (r?.ok && r?.user?.shippingAddress) {
-          const s = r.user.shippingAddress || {};
-
-          setName(s.fullName || "");
-          setPhone(s.phone1 || s.phone2 || "");
-          setDistrict(s.district || "");
-          setThana(s.upazila || "");
-          setAddress(s.addressLine || "");
-          setNote(s.note || "");
-        }
-      } catch {
-        // ignore
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   const submit = async () => {
     const token = getToken();
     if (!token) {
@@ -108,18 +104,12 @@ export default function Checkout() {
       return;
     }
 
-    if (!name.trim() || !phone.trim() || !district.trim() || !thana.trim() || !address.trim()) {
+    if (!name || !phone || !district || !thana || !address) {
       show("সব ফিল্ড পূরণ করুন");
       return;
     }
 
-    if (!items.length) {
-      show("Cart empty");
-      router.push("/cart");
-      return;
-    }
-
-    const orderPayload = {
+    const payload = {
       customerName: name.trim(),
       phone: phone.trim(),
       district: district.trim(),
@@ -142,7 +132,7 @@ export default function Checkout() {
     try {
       setLoading(true);
 
-      // ✅ SAVE shippingAddress to server (so next time auto-fill হবে)
+      // ✅ SAVE SHIPPING FIRST
       await api.putAuth("/api/auth/me", token, {
         shippingAddress: {
           fullName: name.trim(),
@@ -151,17 +141,10 @@ export default function Checkout() {
           upazila: thana.trim(),
           addressLine: address.trim(),
           note: note.trim(),
-
-          // UI তে নেই, তাই খালি থাকছে
-          division: "",
-          phone2: "",
-          union: "",
-          postCode: "",
         },
       });
 
-      // ✅ PLACE ORDER
-      const r = await api.postAuth("/api/orders", token, orderPayload);
+      const r = await api.postAuth("/api/orders", token, payload);
 
       if (r?.ok) {
         show("Order placed ✅");
@@ -182,25 +165,23 @@ export default function Checkout() {
 
   return (
     <div className="container" style={{ paddingBottom: 140 }}>
-      {msg ? (
+      {msg && (
         <div
           style={{
             position: "sticky",
             top: 8,
-            zIndex: 10,
-            background: "rgba(0,0,0,0.75)",
+            background: "rgba(0,0,0,0.8)",
             color: "#fff",
             padding: "10px 12px",
             borderRadius: 12,
-            width: "fit-content",
             fontWeight: 800,
           }}
         >
           {msg}
         </div>
-      ) : null}
+      )}
 
-      <h2 style={{ marginTop: 10 }}>Checkout</h2>
+      <h2>Checkout</h2>
 
       <div className="box">
         <div className="lbl">নাম</div>
@@ -228,29 +209,15 @@ export default function Checkout() {
       </div>
 
       <div className="box">
-        <div className="lbl">অর্ডার নোট (Optional)</div>
+        <div className="lbl">অর্ডার নোট</div>
         <textarea className="input" value={note} onChange={(e) => setNote(e.target.value)} />
-      </div>
-
-      <div className="box">
-        <div className="lbl">Payment</div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="radio" checked={payMode === "full"} onChange={() => setPayMode("full")} />
-            Full Payment
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="radio" checked={payMode === "cod"} onChange={() => setPayMode("cod")} />
-            Cash On Delivery
-          </label>
-        </div>
       </div>
 
       <div className="box">
         <div style={{ fontWeight: 900 }}>Total: ৳ {total}</div>
       </div>
 
-      <button className="btnPrimary" type="button" onClick={submit} disabled={loading}>
+      <button className="btnPrimary" onClick={submit} disabled={loading}>
         {loading ? "Processing..." : "অর্ডার নিশ্চিত করুন"}
       </button>
     </div>
