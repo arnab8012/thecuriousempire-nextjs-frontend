@@ -5,22 +5,36 @@ import { useNavigate } from "@/utils/useNavigate";
 import { useFavorites } from "../context/FavoritesContext";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-export default function ProductCard({ p }) {
+function pid(p: any) {
+  return String(p?._id ?? p?.id ?? p?.slug ?? "");
+}
+
+function safeImg(p: any) {
+  const img =
+    (Array.isArray(p?.images) && p.images.length ? p.images[0] : null) ||
+    p?.image ||
+    "https://via.placeholder.com/300";
+  return String(img);
+}
+
+export default function ProductCard({ p }: { p: any }) {
   const nav = useNavigate();
   const fav = useFavorites();
   const { user } = useAuth();
-  const { add } = useCart();
+  const cart = useCart();
 
-  const isFav = Array.isArray(fav?.favIds) ? fav.favIds.includes(p?._id) : false;
+  const id = useMemo(() => pid(p), [p]);
+  const img = useMemo(() => safeImg(p), [p]);
 
-  const img =
-    Array.isArray(p?.images) && p.images.length
-      ? p.images[0]
-      : p?.image || "https://via.placeholder.com/300";
+  // যদি id নাই থাকে, link ভাঙবে না (সেফ)
+  const productLink = id ? `/product/${id}` : "/shop";
 
-  const productLink = "/product/" + (p?._id || "");
+  const isFav = useMemo(() => {
+    const list = Array.isArray(fav?.favIds) ? fav.favIds : [];
+    return id ? list.includes(id) : false;
+  }, [fav?.favIds, id]);
 
   // ✅ toast
   const [toast, setToast] = useState({ show: false, text: "" });
@@ -31,85 +45,78 @@ export default function ProductCard({ p }) {
     return () => clearTimeout(t);
   }, [toast.show]);
 
-  // ✅ prevent parent click (Home এর category button / wrapper)
-  const stop = (e) => {
+  const stop = (e: any) => {
     e.preventDefault();
     e.stopPropagation();
   };
 
-  const onFav = (e) => {
+  const onFav = (e: any) => {
     stop(e);
+
+    if (!id) return;
 
     // ✅ login ছাড়া priyo না
     if (!user) {
       nav("/login");
       return;
     }
-    fav?.toggle?.(p._id);
+
+    fav?.toggle?.(id);
   };
 
-  const onAddCart = (e) => {
+  const onAddCart = (e: any) => {
     stop(e);
 
-    add?.({
-      productId: p?._id,
-      title: p?.title,
-      price: p?.price,
+    if (!id) {
+      setToast({ show: true, text: "Product not available" });
+      return;
+    }
+
+    cart?.add?.({
+      productId: id, // ✅ _id/id দুটোই handle
+      title: p?.title || "",
+      price: Number(p?.price || 0),
       image: img,
       variant: "",
       qty: 1,
     });
 
-    // ✅ only toast (no navigation)
     setToast({ show: true, text: "✓ Added to cart" });
   };
 
   return (
     <div className="pCard">
-      {/* ✅ bottom toast */}
       {toast.show && <div className="toastBottom">{toast.text}</div>}
 
-      {/* image area */}
       <div className="pImgWrap">
-        <Link to={productLink} onClick={(e) => e.stopPropagation()}>
+        <Link to={productLink} onClick={(e: any) => e.stopPropagation()}>
           <img
             className="pImg"
             src={img}
             alt={p?.title || "product"}
             loading="lazy"
-            onError={(e) => {
+            onError={(e: any) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = "https://via.placeholder.com/300";
             }}
           />
         </Link>
 
-        {/* favorite */}
         <button className="pFav" type="button" onClick={onFav} title="Priyo">
           {isFav ? "❤️" : "🤍"}
         </button>
       </div>
 
-      {/* body + actions (সব একই wrapper এ থাকবে) */}
-      <div className="pBody" onClick={(e) => e.stopPropagation()}>
-        <Link
-          to={productLink}
-          className="pTitle"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <div className="pBody" onClick={(e: any) => e.stopPropagation()}>
+        <Link to={productLink} className="pTitle" onClick={(e: any) => e.stopPropagation()}>
           {p?.title}
         </Link>
 
-        {/* PRICE */}
         <div className="pcPriceRow">
-          <span className="pcPrice">৳ {p?.price || 0}</span>
-
-          {p?.compareAtPrice ? (
-            <span className="pcCut">৳ {p.compareAtPrice}</span>
-          ) : null}
+          <span className="pcPrice">৳ {Number(p?.price || 0)}</span>
+          {p?.compareAtPrice ? <span className="pcCut">৳ {Number(p.compareAtPrice)}</span> : null}
         </div>
 
-        {/* RATING + SOLD (optional) */}
         <div className="pcMetaRow">
           <span className="pcStar">⭐</span>
           <span className="pcRating">
@@ -120,11 +127,7 @@ export default function ProductCard({ p }) {
         </div>
 
         <div className="pActions">
-          <Link
-            to={productLink}
-            className="btnSoft"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <Link to={productLink} className="btnSoft" onClick={(e: any) => e.stopPropagation()}>
             View
           </Link>
 
