@@ -1,64 +1,65 @@
 "use client";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+const BASE = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, ""); // শেষের / কেটে দেয়
 
 async function request(path: string, options: RequestInit = {}) {
+  const url = `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  const text = await res.text();
   try {
-    const res = await fetch(`${BASE}${path}`, {
-      // ✅ CORS friendly (cookie না লাগলে omit রাখো)
-      credentials: options.credentials ?? "omit",
-      headers: {
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...(options.headers || {}),
-      },
-      ...options,
-    });
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return { ok: false, message: text || "Invalid JSON response" };
+  }
+}
 
-    const text = await res.text();
-    let data: any = null;
-
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = { ok: false, message: text };
-    }
-
-    // ✅ 4xx/5xx হলে crash না করে ok:false রিটার্ন
-    if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status,
-        message: data?.message || res.statusText || "Request failed",
-        ...data,
-      };
-    }
-
-    return data;
-  } catch (err: any) {
-    // ✅ fetch/CORS/network error হলেও crash হবে না
-    return {
-      ok: false,
-      message: err?.message || "Network/CORS error",
-    };
+function safeToken() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem("token") || "";
+  } catch {
+    return "";
   }
 }
 
 export const api = {
+  // ✅ expose BASE (Home এর absUrl এ api.BASE দরকার)
   BASE,
+
+  // ✅ token helper (PrivateRoute/ProtectedRoute এর জন্য MUST)
+  token: safeToken,
 
   get: (path: string) => request(path, { method: "GET" }),
 
   post: (path: string, body?: any) =>
-    request(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+    request(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 
   put: (path: string, body?: any) =>
-    request(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+    request(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 
   delete: (path: string) => request(path, { method: "DELETE" }),
 
-  // token calls
+  // 🔐 With token (Authorization header)
   getAuth: (path: string, token: string) =>
-    request(path, { method: "GET", headers: { Authorization: `Bearer ${token}` } }),
+    request(path, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 
   postAuth: (path: string, token: string, body?: any) =>
     request(path, {
@@ -75,5 +76,8 @@ export const api = {
     }),
 
   deleteAuth: (path: string, token: string) =>
-    request(path, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }),
+    request(path, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 };
