@@ -1,169 +1,102 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-const CartContext = createContext(null);
+type CartItem = {
+  id: string;
+  title?: string;
+  price?: number;
+  qty: number;
+  variant?: string;
+};
+
+type CartCtx = {
+  items: CartItem[];
+  buyNowItem: CartItem | null;
+  addToCart: (item: CartItem) => void;
+  removeFromCart: (id: string) => void;
+  setQty: (id: string, qty: number) => void;
+  clearCart: () => void;
+  setBuyNow: (item: CartItem) => void;
+  clearBuyNow: () => void;
+};
+
+const CartContext = createContext<CartCtx | null>(null);
 
 const CART_KEY = "cart_items_v1";
 const BUY_KEY = "buy_now_item_v1";
 
-function safeJsonParse(text, fallback) {
+function safeJsonParse<T>(text: string | null, fallback: T): T {
   try {
-    return JSON.parse(text);
+    return text ? (JSON.parse(text) as T) : fallback;
   } catch {
     return fallback;
   }
 }
 
-function loadFromStorage(key, fallback) {
+function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
-  const raw = window.localStorage.getItem(key);
-  if (!raw) return fallback;
-  return safeJsonParse(raw, fallback);
+  return safeJsonParse<T>(localStorage.getItem(key), fallback);
 }
 
-function saveToStorage(key, value) {
+function saveToStorage<T>(key: string, val: T) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  localStorage.setItem(key, JSON.stringify(val));
 }
 
-export function CartProvider({ children }) {
-  // ✅ start empty, then load after mount (avoids client crash)
-  const [items, setItems] = useState([]);
-  const [checkoutItem, setCheckoutItem] = useState(null);
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [buyNowItem, setBuyNowItem] = useState<CartItem | null>(null);
 
-  // ✅ load once on mount
   useEffect(() => {
-    const loadedItems = loadFromStorage(CART_KEY, []);
-    setItems(Array.isArray(loadedItems) ? loadedItems : []);
-
-    const loadedBuy = loadFromStorage(BUY_KEY, null);
-    setCheckoutItem(loadedBuy || null);
+    setItems(loadFromStorage<CartItem[]>(CART_KEY, []));
+    setBuyNowItem(loadFromStorage<CartItem | null>(BUY_KEY, null));
   }, []);
 
-  // ✅ persist cart
-  useEffect(() => {
-    saveToStorage(CART_KEY, items);
-  }, [items]);
+  useEffect(() => saveToStorage(CART_KEY, items), [items]);
+  useEffect(() => saveToStorage(BUY_KEY, buyNowItem), [buyNowItem]);
 
-  // ---------- CART ----------
-  const add = (item) => {
+  const addToCart = (item: CartItem) => {
     setItems((prev) => {
-      const i = prev.findIndex(
-        (x) =>
-          x.productId === item.productId &&
-          String(x.variant || "") === String(item.variant || "")
-      );
-
-      if (i >= 0) {
-        return prev.map((x, idx) =>
-          idx === i
-            ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) }
-            : x
-        );
+      const idx = prev.findIndex((x) => x.id === item.id && x.variant === item.variant);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], qty: copy[idx].qty + (item.qty || 1) };
+        return copy;
       }
-      return [...prev, { ...item, qty: Number(item.qty || 1) }];
+      return [...prev, { ...item, qty: item.qty || 1 }];
     });
   };
 
-  const inc = (productId, variant = "") => {
-    setItems((prev) =>
-      prev.map((x) => {
-        const same =
-          String(x.productId) === String(productId) &&
-          String(x.variant || "") === String(variant || "");
-        return same ? { ...x, qty: Number(x.qty || 0) + 1 } : x;
-      })
-    );
-  };
+  const removeFromCart = (id: string) => setItems((prev) => prev.filter((x) => x.id !== id));
 
-  const dec = (productId, variant = "") => {
-    setItems((prev) =>
-      prev.map((x) => {
-        const same =
-          String(x.productId) === String(productId) &&
-          String(x.variant || "") === String(variant || "");
-        return same ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) } : x;
-      })
-    );
-  };
+  const setQty = (id: string, qty: number) =>
+    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, qty: Math.max(1, qty) } : x)));
 
-  const remove = (productId, variant = "") => {
-    setItems((prev) =>
-      prev.filter(
-        (x) =>
-          !(
-            String(x.productId) === String(productId) &&
-            String(x.variant || "") === String(variant || "")
-          )
-      )
-    );
-  };
+  const clearCart = () => setItems([]);
 
-  const clear = () => {
-    setItems([]);
-    if (typeof window !== "undefined") window.localStorage.removeItem(CART_KEY);
-  };
+  const setBuyNow = (item: CartItem) => setBuyNowItem({ ...item, qty: item.qty || 1 });
+  const clearBuyNow = () => setBuyNowItem(null);
 
-  // ---------- BUY NOW ----------
-  const buyNow = (product, variant = "", qty = 1) => {
-    const one = {
-      productId: product._id,
-      title: product.title,
-      price: product.price,
-      image:
-        product.images?.[0] ||
-        product.image ||
-        "https://via.placeholder.com/300",
-      variant,
-      qty,
-    };
-
-    setCheckoutItem(one);
-    saveToStorage(BUY_KEY, one);
-  };
-
-  const clearBuyNow = () => {
-    setCheckoutItem(null);
-    if (typeof window !== "undefined") window.localStorage.removeItem(BUY_KEY);
-  };
-
-  const cartCount = useMemo(
-    () => items.reduce((s, x) => s + (Number(x.qty) || 0), 0),
-    [items]
+  const value = useMemo<CartCtx>(
+    () => ({
+      items,
+      buyNowItem,
+      addToCart,
+      removeFromCart,
+      setQty,
+      clearCart,
+      setBuyNow,
+      clearBuyNow,
+    }),
+    [items, buyNowItem]
   );
-
-  const value = {
-    items,
-    add,
-    inc,
-    dec,
-    remove,
-    clear,
-    cartCount,
-    buyNow,
-    checkoutItem,
-    clearBuyNow,
-  };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart() {
   const ctx = useContext(CartContext);
-  if (ctx) return ctx;
-
-  // fallback (never crash)
-  return {
-    items: [],
-    add: () => {},
-    inc: () => {},
-    dec: () => {},
-    remove: () => {},
-    clear: () => {},
-    cartCount: 0,
-    buyNow: () => {},
-    checkoutItem: null,
-    clearBuyNow: () => {},
-  };
+  if (!ctx) throw new Error("useCart must be used inside CartProvider");
+  return ctx;
 }
