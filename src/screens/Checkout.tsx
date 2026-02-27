@@ -1,10 +1,16 @@
 "use client";
 
+// ✅ Next.js (App Router) version of your old Vite Checkout.jsx
+// ✅ Same localStorage book system + DB save (PUT /api/auth/me)
+// ✅ Replace-ready: app/(whatever)/checkout/Checkout.tsx  or  src/screens/Checkout.tsx
+
+import "../styles/checkout.css";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/api";
+import useNoIndex from "../utils/useNoIndex";
 
 const DIVISIONS = [
   "Dhaka",
@@ -17,30 +23,32 @@ const DIVISIONS = [
   "Mymensingh",
 ];
 
+const BOOK_KEY = "shipping_book_v1";
+
 type Shipping = {
-  label?: string;
   fullName: string;
   phone1: string;
-  phone2?: string;
+  phone2: string;
   division: string;
   district: string;
   upazila: string;
-  union?: string;
-  postCode?: string;
   addressLine: string;
-  note?: string;
-  isDefault?: boolean;
+  note: string;
 };
 
-type SavedAddress = {
-  _id: string;
-  label?: string;
-  isDefault?: boolean;
-} & Shipping;
+type BookItem = {
+  id: string;
+  label: string;
+  shipping: Shipping;
+};
+
+type Book = {
+  selectedId: string;
+  items: BookItem[];
+};
 
 function emptyShipping(user: any): Shipping {
   return {
-    label: "Home",
     fullName: user?.fullName || "",
     phone1: user?.phone || "",
     phone2: "",
@@ -49,36 +57,68 @@ function emptyShipping(user: any): Shipping {
     upazila: "",
     addressLine: "",
     note: "",
-    isDefault: false,
   };
 }
 
 function makeLabel(s: Shipping) {
-  const a = [s.label, s.fullName, s.phone1, s.division, s.district, s.upazila]
+  const a = [s.fullName, s.phone1, s.division, s.district, s.upazila, s.addressLine]
     .filter(Boolean)
     .join(" | ");
   return a.length > 80 ? a.slice(0, 80) + "..." : a || "Address";
 }
 
+function uid() {
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function loadBook(): Book {
+  if (typeof window === "undefined") return { selectedId: "", items: [] };
+
+  try {
+    const b = JSON.parse(localStorage.getItem(BOOK_KEY) || "{}");
+    return {
+      selectedId: b?.selectedId || "",
+      items: Array.isArray(b?.items) ? b.items : [],
+    };
+  } catch {
+    return { selectedId: "", items: [] };
+  }
+}
+
 export default function Checkout() {
+  useNoIndex?.("noindex, nofollow");
+
   const router = useRouter();
   const sp = useSearchParams();
-  const mode = sp.get("mode") || ""; // "buy" | ""
-  const buyMode = mode === "buy";
+
+  const buyMode = sp.get("mode") === "buy";
 
   const cart = useCart() as any;
-  const { user } = useAuth();
+  const { user } = useAuth() as any;
 
   const token = api.token();
 
-  // ✅ order items
+  // ✅ ADD: DB-তে shippingAddress save করার helper (legacy single object)
+  const saveShippingToDB = async (ship: Shipping) => {
+    if (!token) return { ok: false, message: "No token" };
+    // backend route: PUT /api/auth/me  body: { shippingAddress: ship }
+    // (তোমার backend এ /me আছে)
+    return await api.putAuth("/api/auth/me", token, { shippingAddress: ship });
+  };
+
+  const [book, setBook] = useState<Book>(() => loadBook());
+  const [useNew, setUseNew] = useState<boolean>(false);
+  const [selectedId, setSelectedId] = useState<string>(book.selectedId || "");
+  const [shipping, setShipping] = useState<Shipping>(() => emptyShipping(user));
+
+  const [paymentMethod, setPaymentMethod] = useState<"COD" | "FULL_PAYMENT">("COD");
+  const deliveryCharge = 110;
+
+  // ✅ orderItems: buyMode হলে শুধু checkoutItem, না হলে cart items
   const orderItems = useMemo(() => {
     if (buyMode) return cart?.checkoutItem ? [cart.checkoutItem] : [];
     return Array.isArray(cart?.items) ? cart.items : [];
   }, [buyMode, cart?.items, cart?.checkoutItem]);
-
-  // ✅ totals
-  const deliveryCharge = 110;
 
   const subTotal = useMemo(() => {
     return orderItems.reduce(
@@ -89,339 +129,168 @@ export default function Checkout() {
 
   const total = subTotal + deliveryCharge;
 
-  // ✅ DB address book
-  const [saved, setSaved] = useState<SavedAddress[]>([]);
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [useNew, setUseNew] = useState<boolean>(false);
-
-  // ✅ current shipping form state
-  const [shipping, setShipping] = useState<Shipping>(emptyShipping(user));
-
-  const [paymentMethod, setPaymentMethod] = useState<"COD" | "FULL_PAYMENT">("COD");
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  const show = (t: string) => {
-    setMsg(t);
-    if (typeof window === "undefined") return;
-    try {
-      window.clearTimeout((window as any).__co_msg);
-      (window as any).__co_msg = window.setTimeout(() => setMsg(""), 1400);
-    } catch {}
-  };
-
-  // ✅ guards
+  // ✅ when user loads / book changes -> set initial shipping
   useEffect(() => {
-    if (!token)
-      router.replace(
-        "/login?next=" +
-          encodeURIComponent("/checkout" + (sp.toString() ? `?${sp.toString()}` : ""))
-      );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    const b = loadBook();
+    setBook(b);
 
-  useEffect(() => {
-    if (!orderItems.length) {
-      router.replace(buyMode ? "/shop" : "/cart");
-    }
-  }, [orderItems.length, router, buyMode]);
+    const sid = b.selectedId || b.items?.[0]?.id || "";
+    setSelectedId(sid);
 
-  // ✅ Load DB addresses from /me
-  useEffect(() => {
-    let alive = true;
-
-    const load = async () => {
-      if (!token) return;
-
-      try {
-        const r = await api.getAuth("/api/auth/me", token);
-        if (!alive) return;
-
-        if (r?.ok && r?.user) {
-          const list: SavedAddress[] = Array.isArray(r.user.shippingAddresses)
-            ? r.user.shippingAddresses
-            : [];
-
-          setSaved(list);
-
-          // pick default
-          const def = list.find((x) => x?.isDefault) || list[0];
-          if (def?._id) {
-            setSelectedId(def._id);
-            setUseNew(false);
-            setShipping({
-              ...emptyShipping(r.user),
-              ...def,
-              division: def.division || "Dhaka",
-            });
-          } else {
-            // fallback: if old single shippingAddress exists
-            const old = r.user.shippingAddress || {};
-            const hasOld = old && Object.keys(old).length > 0;
-            if (hasOld) {
-              setUseNew(false);
-              setShipping({
-                ...emptyShipping(r.user),
-                ...old,
-                division: old.division || "Dhaka",
-              });
-            } else {
-              setUseNew(true);
-              setShipping(emptyShipping(r.user));
-            }
-          }
-        }
-      } catch {
-        // ignore
+    if (!sid) {
+      // 🔥 FIX: localStorage না থাকলে DB address ব্যবহার করো
+      if (user?.shippingAddress && Object.keys(user.shippingAddress).length > 0) {
+        setUseNew(false);
+        setShipping({ ...emptyShipping(user), ...(user.shippingAddress as Shipping) });
+      } else {
+        setUseNew(true);
+        setShipping(emptyShipping(user));
       }
-    };
+      return;
+    }
 
-    load();
-    return () => {
-      alive = false;
-    };
-  }, [token]);
+    const found = b.items.find((x) => x.id === sid);
+    if (found?.shipping) {
+      setUseNew(false);
+      setShipping({ ...emptyShipping(user), ...found.shipping });
+    } else {
+      setUseNew(true);
+      setShipping(emptyShipping(user));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
-  // ✅ when selectedId changes, load that address into form
+  // ✅ when selectedId changes -> update shipping from book (only if not useNew)
   useEffect(() => {
     if (useNew) return;
-    const found = saved.find((x) => x._id === selectedId);
-    if (found) {
-      setShipping({
-        ...emptyShipping(user),
-        ...found,
-        division: found.division || "Dhaka",
-      });
+    const found = book.items.find((x) => x.id === selectedId);
+    if (found?.shipping) {
+      setShipping({ ...emptyShipping(user), ...found.shipping });
     }
-    // ✅ FIX: saved dependency add (তোমার কোড বাদ না দিয়ে শুধু fix)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, useNew, saved]);
+  }, [selectedId, useNew, book.items, user]);
 
-  // ✅ validate
+  // ✅ buyMode: checkoutItem না থাকলে user কে shop/cart এ পাঠাবে
+  if (!orderItems.length) {
+    return (
+      <div className="container">
+        No item selected{" "}
+        <button
+          className="btnGhost"
+          type="button"
+          onClick={() => router.push(buyMode ? "/shop" : "/cart")}
+        >
+          Go {buyMode ? "shop" : "cart"}
+        </button>
+      </div>
+    );
+  }
+
   const validateShipping = () => {
-    if (!shipping.fullName?.trim()) return "Name required";
-    if (!shipping.phone1?.trim()) return "Phone required";
-    if (!shipping.division?.trim()) return "Division required";
-    if (!shipping.district?.trim()) return "District required";
-    if (!shipping.upazila?.trim()) return "Upazila/Thana required";
-    if (!shipping.addressLine?.trim()) return "Address required";
+    if (!shipping.fullName) return "Name required";
+    if (!shipping.phone1) return "Phone required";
+    if (!shipping.division) return "Division required";
+    if (!shipping.district) return "District required";
+    if (!shipping.upazila) return "Upazila/Thana required";
+    if (!shipping.addressLine) return "Address required";
     return "";
   };
 
-  // ✅ DB actions
-  const setDefaultInDB = async (id: string) => {
-    if (!token || !id) return;
-    try {
-      await api.postAuth(`/api/auth/shipping/${id}/default`, token, {});
-    } catch {}
-  };
+  const saveToBook = (ship: Shipping) => {
+    const current = loadBook();
 
-  const createAddressInDB = async (ship: Shipping) => {
-    if (!token) return { ok: false, message: "No token" };
-    return await api.postAuth("/api/auth/shipping", token, {
-      ...ship,
-      label: ship.label || makeLabel(ship),
-      // ✅ FIX: setDefault বাদ, backend-compatible
-      isDefault: true,
-    });
-  };
+    // update existing saved
+    if (!useNew && selectedId) {
+      const nextItems = current.items.map((x) =>
+        x.id === selectedId ? { ...x, shipping: ship, label: x.label || makeLabel(ship) } : x
+      );
 
-  const updateAddressInDB = async (id: string, ship: Shipping) => {
-    if (!token) return { ok: false, message: "No token" };
-    return await api.putAuth(`/api/auth/shipping/${id}`, token, {
-      ...ship,
-      label: ship.label || makeLabel(ship),
-      // ✅ FIX: setDefault বাদ, backend-compatible
-      isDefault: true,
-    });
-  };
-
-  const deleteAddressInDB = async (id: string) => {
-    if (!token) return { ok: false, message: "No token" };
-    return await api.deleteAuth(`/api/auth/shipping/${id}`, token);
-  };
-
-  // ✅ Save & Use (new OR update)
-  const saveAndUse = async () => {
-    const m = validateShipping();
-    if (m) return show(m);
-
-    setLoading(true);
-    try {
-      const r =
-        !useNew && selectedId
-          ? await updateAddressInDB(selectedId, shipping)
-          : await createAddressInDB(shipping);
-
-      if (!r?.ok) {
-        show(r?.message || "Address save failed");
-        return;
-      }
-
-      const list: SavedAddress[] = Array.isArray(r.user?.shippingAddresses)
-  ? r.user.shippingAddresses
-  : Array.isArray(r.user?.shipping_addresses)
-  ? r.user.shipping_addresses
-  : Array.isArray(r.user?.items)
-  ? r.user.items
-  : Array.isArray(r?.items)
-  ? r.items
-  : [];
-
-      setSaved(list);
-
-      const def = list.find((x) => x.isDefault) || list[0];
-      if (def?._id) {
-        setSelectedId(def._id);
-        setUseNew(false);
-        setShipping({
-          ...emptyShipping(r.user),
-          ...def,
-          division: def.division || "Dhaka",
-        });
-      }
-
-      show("✅ Address saved");
-    } finally {
-      setLoading(false);
+      const next = { ...current, selectedId, items: nextItems };
+      localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+      setBook(next);
+      return;
     }
-  };
 
-  // ✅ When selecting saved address -> also set default in DB (multi-device)
-  const onSelectSaved = async (id: string) => {
+    // create new saved
+    const id = uid();
+    const nextItems = [{ id, label: makeLabel(ship), shipping: ship }, ...(current.items || [])];
+
+    const next = { selectedId: id, items: nextItems };
+    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+
+    setBook(next);
     setSelectedId(id);
     setUseNew(false);
-    await setDefaultInDB(id);
   };
 
-  const onDeleteSaved = async (id: string) => {
-    if (!confirm("Delete this address?")) return;
+  const deleteAddress = (id: string) => {
+    const current = loadBook();
+    const nextItems = (current.items || []).filter((x) => x.id !== id);
 
-    setLoading(true);
-    try {
-      const r = await deleteAddressInDB(id);
-      if (!r?.ok) {
-        show(r?.message || "Delete failed");
-        return;
-      }
+    const nextSelected =
+      current.selectedId === id ? nextItems[0]?.id || "" : current.selectedId;
 
-      // ✅ guard: token না থাকলে আর fetch করবে না
-      if (!token) {
-        setSaved([]);
-        setSelectedId("");
-        setUseNew(true);
-        setShipping(emptyShipping(user));
-        show("Deleted ✅");
-        return;
-      }
+    const next = { selectedId: nextSelected, items: nextItems };
+    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
 
-      const me = await api.getAuth("/api/auth/me", token);
-      const list: SavedAddress[] = Array.isArray(me?.user?.shippingAddresses)
-        ? me.user.shippingAddresses
-        : [];
-      setSaved(list);
+    setBook(next);
+    setSelectedId(nextSelected);
 
-      const def = list.find((x) => x.isDefault) || list[0];
-      if (def?._id) {
-        setSelectedId(def._id);
-        setUseNew(false);
-        setShipping({
-          ...emptyShipping(me.user),
-          ...def,
-          division: def.division || "Dhaka",
-        });
-      } else {
-        setSelectedId("");
-        setUseNew(true);
-        setShipping(emptyShipping(me?.user || user));
-      }
-
-      show("Deleted ✅");
-    } finally {
-      setLoading(false);
+    if (!nextSelected) {
+      setUseNew(true);
+      setShipping(emptyShipping(user));
+    } else {
+      setUseNew(false);
+      const found = nextItems.find((x) => x.id === nextSelected);
+      if (found?.shipping) setShipping({ ...emptyShipping(user), ...found.shipping });
     }
   };
 
-  // ✅ Place order
   const placeOrder = async () => {
-    if (!token) return router.push("/login");
-    const m = validateShipping();
-    if (m) return show(m);
-
-    setLoading(true);
-    try {
-      const r =
-        !useNew && selectedId
-          ? await updateAddressInDB(selectedId, shipping)
-          : await createAddressInDB(shipping);
-
-      if (!r?.ok) {
-        show(r?.message || "Address DB save failed");
-        return;
-      }
-
-      const payload = {
-        items: orderItems.map((x: any) => ({
-          productId: x.productId,
-          qty: x.qty,
-          variant: x.variant || "",
-          title: x.title,
-          price: x.price,
-          image: x.image,
-        })),
-        shipping: {
-          ...shipping,
-          label: shipping.label || makeLabel(shipping),
-        },
-        paymentMethod,
-        deliveryCharge,
-        subTotal,
-        total,
-        mode: buyMode ? "buy" : "cart",
-      };
-
-      const or = await api.postAuth("/api/orders", token, payload);
-      if (!or?.ok) {
-        show(or?.message || "Order failed");
-        return;
-      }
-
-      if (buyMode) cart?.clearBuyNow?.();
-      else cart?.clear?.();
-
-      show("✅ Order placed!");
-      router.push("/profile");
-    } finally {
-      setLoading(false);
+    if (!token) {
+      router.push("/login");
+      return;
     }
+
+    const m = validateShipping();
+    if (m) return alert(m);
+
+    // ✅ DB-তে shippingAddress save (multi-device fix)
+    const db = await saveShippingToDB(shipping);
+    if (!db?.ok) return alert(db?.message || "Address DB save failed");
+
+    // ✅ local book save (same as old)
+    saveToBook(shipping);
+
+    const payload = {
+      items: orderItems.map((x: any) => ({
+        productId: x.productId,
+        qty: x.qty,
+        variant: x.variant,
+      })),
+      shipping,
+      paymentMethod,
+    };
+
+    // ✅ Next.js version: postAuth
+    const r = await api.postAuth("/api/orders", token, payload);
+    if (!r?.ok) return alert(r?.message || "Order failed");
+
+    if (buyMode) cart?.clearBuyNow?.();
+    else cart?.clear?.();
+
+    alert("✅ Order placed!");
+    router.push("/profile");
   };
 
   return (
-    <div className="container" style={{ paddingBottom: 140 }}>
-      {msg ? (
-        <div
-          style={{
-            position: "sticky",
-            top: 8,
-            zIndex: 10,
-            background: "rgba(0,0,0,0.75)",
-            color: "#fff",
-            padding: "10px 12px",
-            borderRadius: 12,
-            width: "fit-content",
-            fontWeight: 800,
-          }}
-        >
-          {msg}
-        </div>
-      ) : null}
-
-      <h2 style={{ marginTop: 10 }}>Shipping Details</h2>
+    <div className="container">
+      <h2>Shipping Details</h2>
 
       {/* ✅ Saved addresses */}
-      {saved.length > 0 && (
+      {book.items?.length > 0 && (
         <div className="box" style={{ marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <div className="rowBetween">
             <b>Saved Addresses</b>
 
             <button
@@ -429,7 +298,6 @@ export default function Checkout() {
               className="btnGhost"
               onClick={() => {
                 setUseNew(true);
-                setSelectedId("");
                 setShipping(emptyShipping(user));
               }}
             >
@@ -439,36 +307,36 @@ export default function Checkout() {
 
           {!useNew && (
             <div style={{ marginTop: 10 }}>
-              {saved.map((x) => (
+              {book.items.map((x) => (
                 <div
-                  key={x._id}
+                  key={x.id}
+                  className="rowBetween"
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
                     padding: "8px 10px",
                     border: "1px solid #eee",
                     borderRadius: 8,
                     marginBottom: 8,
-                    background: selectedId === x._id ? "#f7f7ff" : "#fff",
+                    background: selectedId === x.id ? "#f7f7ff" : "#fff",
                   }}
                 >
                   <label style={{ cursor: "pointer", flex: 1 }}>
                     <input
                       type="radio"
-                      checked={selectedId === x._id}
-                      onChange={() => onSelectSaved(x._id)}
+                      checked={selectedId === x.id}
+                      onChange={() => setSelectedId(x.id)}
                       style={{ marginRight: 8 }}
                     />
-                    {(x.label || makeLabel(x)) + (x.isDefault ? " ✅" : "")}
+                    {x.label}
                   </label>
 
                   <button
                     type="button"
                     className="btnGhost"
                     style={{ color: "crimson", borderColor: "#ffd6d6" }}
-                    onClick={() => onDeleteSaved(x._id)}
-                    disabled={loading}
+                    onClick={() => {
+                      if (!confirm("Delete this address?")) return;
+                      deleteAddress(x.id);
+                    }}
                   >
                     🗑 Delete
                   </button>
@@ -479,13 +347,12 @@ export default function Checkout() {
 
           {useNew && (
             <div className="muted" style={{ marginTop: 10 }}>
-              New address mode — নিচে নতুন ঠিকানা লিখে “Save & Use” করো
+              New address mode — নিচে নতুন ঠিকানা লিখে “Save &amp; Use” করো
             </div>
           )}
         </div>
       )}
 
-      {/* ✅ Form */}
       <div className="box">
         <label className="lbl">আপনার নাম</label>
         <input
@@ -504,7 +371,7 @@ export default function Checkout() {
         <label className="lbl">মোবাইল নাম্বার 2 (optional)</label>
         <input
           className="input"
-          value={shipping.phone2 || ""}
+          value={shipping.phone2}
           onChange={(e) => setShipping({ ...shipping, phone2: e.target.value })}
         />
 
@@ -546,57 +413,61 @@ export default function Checkout() {
         <textarea
           className="input"
           rows={3}
-          value={shipping.note || ""}
+          value={shipping.note}
           onChange={(e) => setShipping({ ...shipping, note: e.target.value })}
         />
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            marginTop: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <button type="button" className="btnGhost" onClick={saveAndUse} disabled={loading}>
-            {loading ? "Saving..." : "Save & Use"}
+        <div className="rowBetween" style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            className="btnGhost"
+            onClick={async () => {
+              const m = validateShipping();
+              if (m) return alert(m);
+
+              const db = await saveShippingToDB(shipping);
+              if (!db?.ok) return alert(db?.message || "Address DB save failed");
+
+              saveToBook(shipping);
+              alert("✅ Address saved!");
+            }}
+          >
+            Save &amp; Use
           </button>
 
-          {saved.length > 0 && (
+          {book.items?.length > 0 && (
             <button
               type="button"
               className="btnGhost"
               onClick={() => {
                 setUseNew(false);
-                const def = saved.find((x) => x.isDefault) || saved[0];
-                if (def?._id) onSelectSaved(def._id);
+                const sid = book.selectedId || book.items?.[0]?.id || "";
+                setSelectedId(sid);
+                const found = book.items.find((x) => x.id === sid);
+                if (found?.shipping) setShipping({ ...emptyShipping(user), ...found.shipping });
               }}
-              disabled={loading}
             >
               Use Saved Address
             </button>
           )}
         </div>
 
-        {/* totals */}
         <div className="box" style={{ marginTop: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div className="rowBetween">
             <span>Sub Total:</span>
             <b>৳ {subTotal}</b>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div className="rowBetween">
             <span>Delivery Charge:</span>
             <b>৳ {deliveryCharge}</b>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div className="rowBetween">
             <span>Total:</span>
             <b>৳ {total}</b>
           </div>
         </div>
 
-        {/* payment */}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 10 }}>
+        <div className="rowBetween" style={{ marginTop: 10 }}>
           <label className="radio">
             <input
               type="radio"
@@ -616,14 +487,8 @@ export default function Checkout() {
           </label>
         </div>
 
-        <button
-          className="btnPinkFull"
-          type="button"
-          onClick={placeOrder}
-          style={{ marginTop: 12 }}
-          disabled={loading}
-        >
-          {loading ? "Processing..." : "অর্ডার নিশ্চিত করুন"}
+        <button className="btnPinkFull" type="button" onClick={placeOrder} style={{ marginTop: 12 }}>
+          অর্ডার নিশ্চিত করুন
         </button>
       </div>
     </div>
