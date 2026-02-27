@@ -23,6 +23,9 @@ const AuthContext = createContext<AuthCtx | null>(null);
 const TOKEN_KEY = "token";
 const USER_KEY = "user_v1";
 
+// ✅ তোমার backend এর login endpoint এখানে দাও
+const LOGIN_ENDPOINT = "/auth/login"; // যদি /login হয় তাহলে এখানে বদলাও
+
 function safeJsonParse<T>(raw: string | null, fallback: T): T {
   try {
     return raw ? (JSON.parse(raw) as T) : fallback;
@@ -36,24 +39,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load from storage
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const t = localStorage.getItem(TOKEN_KEY);
-    const u = safeJsonParse<AuthUser | null>(localStorage.getItem(USER_KEY), null);
-
-    setToken(t);
-    setUser(u);
+    setToken(localStorage.getItem(TOKEN_KEY));
+    setUser(safeJsonParse<AuthUser | null>(localStorage.getItem(USER_KEY), null));
     setLoading(false);
   }, []);
 
   const login = async (phone: string, password: string) => {
     try {
-      // ✅ তোমার backend endpoint এখানে সেট করো
-      // ধরলাম: POST /auth/login  -> { token, user }
       const data = await apiFetch<{ token: string; user: AuthUser; message?: string }>(
-        "/auth/login",
+        LOGIN_ENDPOINT,
         {
           method: "POST",
           auth: false,
