@@ -5,21 +5,15 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 export function useLocation() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const sp = useSearchParams();
 
   const search = useMemo(() => {
-    const s = searchParams?.toString?.() || "";
+    const s = sp?.toString?.() || "";
     return s ? `?${s}` : "";
-  }, [searchParams]);
+  }, [sp]);
 
-  // React Router like: location.state (best-effort via history.state)
   const state =
     typeof window !== "undefined" ? (window.history.state as any)?.usr : null;
 
-  return {
-    pathname,
-    search,
-    hash: "",
-    state,
-  };
+  return { pathname, search, hash: "", state };
 }
