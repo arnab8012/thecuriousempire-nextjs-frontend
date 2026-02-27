@@ -45,26 +45,31 @@ export default function Checkout() {
     return `/checkout${q ? `?${q}` : ""}`;
   }, [sp]);
 
+  const show = (t: string) => {
+    setMsg(t);
+    if (typeof window === "undefined") return;
+    try {
+      window.clearTimeout((window as any).__co_msg);
+      (window as any).__co_msg = window.setTimeout(() => setMsg(""), 1600);
+    } catch {}
+  };
+
   // ✅ Guard: token না থাকলে checkout এ থাকবে না
   useEffect(() => {
     const t = getToken();
-    if (!t) {
-      router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
-    }
+    if (!t) router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
   }, [router, nextUrl]);
 
-  // ✅ Guard: cart empty হলে back
+  // ✅ Guard: items empty হলে back
   useEffect(() => {
-    if (!items.length) {
-      router.replace("/cart");
-    }
+    if (!items.length) router.replace("/cart");
   }, [items.length, router]);
 
-  // ✅ AUTO LOAD shipping from server (user.shipping)
+  // ✅ 1) LOAD SHIPPING from server (user.shippingAddress)
   useEffect(() => {
     let alive = true;
 
-    const loadShipping = async () => {
+    (async () => {
       const token = getToken();
       if (!token) return;
 
@@ -72,23 +77,22 @@ export default function Checkout() {
         const r = await api.getAuth("/api/auth/me", token);
         if (!alive) return;
 
-        // ✅ you said before it was saved on server, we assume user.shipping exists
-        const s = r?.ok ? r?.user?.shipping : null;
+        if (r?.ok && r?.user?.shippingAddress) {
+          const s = r.user.shippingAddress || {};
 
-        if (s) {
-          setName(String(s.customerName || s.fullName || "").trim());
-          setPhone(String(s.phone || "").trim());
-          setDistrict(String(s.district || "").trim());
-          setThana(String(s.thana || "").trim());
-          setAddress(String(s.address || "").trim());
-          setNote(String(s.note || "").trim());
+          // ✅ backend fields -> frontend fields mapping
+          setName(s.fullName || "");
+          setPhone(s.phone1 || s.phone2 || "");
+          setDistrict(s.district || "");
+          setThana(s.upazila || "");
+          setAddress(s.addressLine || "");
+          setNote(s.note || "");
         }
       } catch {
-        // ignore (no crash)
+        // ignore silently
       }
-    };
+    })();
 
-    loadShipping();
     return () => {
       alive = false;
     };
@@ -101,15 +105,6 @@ export default function Checkout() {
     );
   }, [items]);
 
-  const show = (t: string) => {
-    setMsg(t);
-    if (typeof window === "undefined") return;
-    try {
-      window.clearTimeout((window as any).__co_msg);
-      (window as any).__co_msg = window.setTimeout(() => setMsg(""), 1400);
-    } catch {}
-  };
-
   const submit = async () => {
     const token = getToken();
     if (!token) {
@@ -117,7 +112,13 @@ export default function Checkout() {
       return;
     }
 
-    if (!name.trim() || !phone.trim() || !district.trim() || !thana.trim() || !address.trim()) {
+    if (
+      !name.trim() ||
+      !phone.trim() ||
+      !district.trim() ||
+      !thana.trim() ||
+      !address.trim()
+    ) {
       show("সব ফিল্ড পূরণ করুন");
       return;
     }
@@ -151,36 +152,36 @@ export default function Checkout() {
     try {
       setLoading(true);
 
-      // ✅ place order (token required)
+      // ✅ 2) SAVE SHIPPING to server (user.shippingAddress)
+      // backend model: shippingAddress { fullName, phone1, district, upazila, addressLine, note }
+      await api.putAuth("/api/auth/me", token, {
+        shippingAddress: {
+          fullName: name.trim(),
+          phone1: phone.trim(),
+          district: district.trim(),
+          upazila: thana.trim(),
+          addressLine: address.trim(),
+          note: note.trim(),
+
+          // এগুলো তোমার UI তে নেই, তাই খালি থাকছে:
+          division: "",
+          phone2: "",
+          union: "",
+          postCode: "",
+        },
+      });
+
+      // ✅ 3) PLACE ORDER
       const r = await api.postAuth("/api/orders", token, payload);
 
       if (r?.ok) {
         show("Order placed ✅");
 
-        // ✅ Save shipping to server profile (so next time any device auto fill)
-        try {
-          await api.putAuth("/api/auth/me", token, {
-            shipping: {
-              customerName: name.trim(),
-              phone: phone.trim(),
-              district: district.trim(),
-              thana: thana.trim(),
-              address: address.trim(),
-              note: note.trim(),
-            },
-          });
-        } catch {
-          // ignore if backend doesn't support shipping save
-        }
-
         // cart clear
-        if (mode === "buy") {
-          cart?.clearBuyNow?.();
-        } else {
-          cart?.clear?.();
-        }
+        if (mode === "buy") cart?.clearBuyNow?.();
+        else cart?.clear?.();
 
-        router.push("/"); // বা তোমার success page
+        router.push("/");
       } else {
         show(r?.message || "Order failed");
       }
