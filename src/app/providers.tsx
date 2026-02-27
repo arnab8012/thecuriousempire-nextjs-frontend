@@ -3,16 +3,13 @@
 import React from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
-// যদি Favourite context থাকে, এখানে add করবে:
-// import { FavProvider } from "@/context/FavContext";
+import { FavoritesProvider } from "@/context/FavoritesContext";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <CartProvider>
-        {/* <FavProvider> */}
-        {children}
-        {/* </FavProvider> */}
+        <FavoritesProvider>{children}</FavoritesProvider>
       </CartProvider>
     </AuthProvider>
   );
