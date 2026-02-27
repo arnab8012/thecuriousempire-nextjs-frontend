@@ -15,15 +15,11 @@ function safeParse(raw, fallback) {
     return fallback;
   }
 }
-function loadKey(key: string, fallback: any) {
-  if (typeof window === "undefined") return fallback; // ✅ SSR safe
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? safeParse(raw, fallback) : fallback;
-  } catch {
-    return fallback;
-  }
+function loadKey(key, fallback) {
+  const raw = localStorage.getItem(key);
+  return raw ? safeParse(raw, fallback) : fallback;
 }
+
 export function FavoritesProvider({ children }) {
   const [activeKey, setActiveKey] = useState(LS_GUEST);
 
@@ -33,11 +29,10 @@ export function FavoritesProvider({ children }) {
   });
 
   useEffect(() => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(activeKey, JSON.stringify(favIds));
-  } catch {}
-}, [favIds, activeKey]);
+    try {
+      localStorage.setItem(activeKey, JSON.stringify(favIds));
+    } catch {}
+  }, [favIds, activeKey]);
 
   const useUserFav = (uidOrPhone) => {
     const uid = String(uidOrPhone || "").trim();
@@ -82,14 +77,5 @@ export function FavoritesProvider({ children }) {
 }
 
 export function useFavorites() {
-  return (
-    useContext(FavoritesCtx) ||
-    ({
-      favIds: [],
-      toggle: () => {},
-      remove: () => {},
-      clear: () => {},
-      useUserFav: () => {},
-    } as any)
-  );
+  return useContext(FavoritesCtx);
 }
