@@ -1,212 +1,99 @@
 "use client";
 
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from "react";
-import { api } from "../api/api";
-import { useCart } from "./CartContext";
-import { useFavorites } from "./FavoritesContext";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/api/api";
 
-const AuthContext = createContext(null);
-
-function getUid(u) {
-  // ✅ যেটা তোমার user object এ আছে সেটা ধরবে
-  return u?._id || u?.id || u?.phone || u?.email || "";
-}
-
-export function AuthProvider({ children }) {
-  const cart = useCart();
-  const fav = useFavorites();
-
-  const [user, setUser] = useState(null);
-  const [booting, setBooting] = useState(true);
-
-  // ===== BOOT: token থাকলে /me =====
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      try {
-        const t = localStorage.getItem("token");
-
-        if (!t) {
-          if (alive) {
-            setUser(null);
-            setBooting(false);
-
-            // ✅ guest mode
-            cart?.useUserCart?.("");
-            fav?.useUserFav?.("");
-          }
-          return;
-        }
-
-        const r = await api.getAuth("/api/auth/me", t);
-        if (!alive) return;
-
-        if (r?.ok) {
-          const u = r.user || null;
-          setUser(u);
-
-          const uid = getUid(u);
-          cart?.useUserCart?.(uid);
-          fav?.useUserFav?.(uid);
-        } else {
-          localStorage.removeItem("token");
-          setUser(null);
-
-          cart?.useUserCart?.("");
-          fav?.useUserFav?.("");
-        }
-      } catch (e) {
-        if (alive) {
-          localStorage.removeItem("token");
-          setUser(null);
-
-          cart?.useUserCart?.("");
-          fav?.useUserFav?.("");
-        }
-      } finally {
-        if (alive) setBooting(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ===== LOGIN =====
-const login = async (phone, password) => {
-  const r = await api.post("/api/auth/login", { phone, password });
-  if (!r?.ok) return r;
-
-  // token save
-  localStorage.setItem("token", r.token);
-
-  // 🔥 IMPORTANT: DB থেকে fresh user নাও
-  const me = await api.getAuth("/api/auth/me", r.token);
-  const u = me?.ok ? me.user : r.user || null;
-
-  setUser(u);
-
-  const uid = getUid(u) || phone;
-  cart?.useUserCart?.(uid);
-  fav?.useUserFav?.(uid);
-
-  setBooting(false);
-  return { ok: true, user: u };
+type AuthUser = {
+  id?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
 };
 
-  // ===== REGISTER =====
-  const register = async ({ fullName, phone, password, gender }) => {
-    const r = await api.post("/api/auth/register", { fullName, phone, password, gender });
-    if (!r?.ok) return r;
+type AuthCtx = {
+  user: AuthUser | null;
+  token: string | null;
+  loading: boolean;
+  login: (phone: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  logout: () => void;
+};
 
-    if (r.token) localStorage.setItem("token", r.token);
+const AuthContext = createContext<AuthCtx | null>(null);
 
-    const u = r.user || null;
+const TOKEN_KEY = "token";
+const USER_KEY = "user_v1";
+
+function safeJsonParse<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load from storage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const t = localStorage.getItem(TOKEN_KEY);
+    const u = safeJsonParse<AuthUser | null>(localStorage.getItem(USER_KEY), null);
+
+    setToken(t);
     setUser(u);
+    setLoading(false);
+  }, []);
 
-    const uid = getUid(u) || phone;
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
+  const login = async (phone: string, password: string) => {
+    try {
+      // ✅ তোমার backend endpoint এখানে সেট করো
+      // ধরলাম: POST /auth/login  -> { token, user }
+      const data = await apiFetch<{ token: string; user: AuthUser; message?: string }>(
+        "/auth/login",
+        {
+          method: "POST",
+          auth: false,
+          body: JSON.stringify({ phone, password }),
+        }
+      );
 
-    setBooting(false);
-    return { ok: true, user: u };
+      if (!data?.token) return { ok: false, message: data?.message || "Token missing" };
+
+      setToken(data.token);
+      setUser(data.user || null);
+
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user || null));
+
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, message: e?.message || "Login failed" };
+    }
   };
 
-  // ===== REFRESH ME (manual) =====
-  const refreshMe = async () => {
-    const t = localStorage.getItem("token");
-    if (!t) return { ok: false, message: "No token" };
-
-    const r = await api.getAuth("/api/auth/me", t);
-    if (!r?.ok) return r;
-
-    const u = r.user || null;
-    setUser(u);
-
-    const uid = getUid(u);
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
-
-    return { ok: true, user: u };
-  };
-
-  // ===== UPDATE ME (profile + shipping address) =====
-  // payload উদাহরণ:
-  // { fullName, gender, dateOfBirth, permanentAddress, shippingAddress: { ... } }
-  const updateMe = async (payload) => {
-    const t = localStorage.getItem("token");
-    if (!t) return { ok: false, message: "No token" };
-
-    // ✅ FIX: putAuth(path, token, body) — তোমারটা উল্টা ছিল
-    const r = await api.putAuth("/api/auth/me", t, payload);
-    if (!r?.ok) return r;
-
-    const u = r.user || null;
-    setUser(u);
-
-    const uid = getUid(u);
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
-
-    return { ok: true, user: u };
-  };
-
-  // ===== RESET PASSWORD (phone + fullName match) =====
-  // Backend এ route লাগবে: POST /api/auth/reset-password
-  // body: { phone, fullName, newPassword }
-  const resetPassword = async (phone, fullName, newPassword) => {
-    const r = await api.post("/api/auth/reset-password", { phone, fullName, newPassword });
-    return r; // {ok:true} বা {ok:false,message}
-  };
-
-  // ===== LOGOUT =====
   const logout = () => {
-    localStorage.removeItem("token");
+    setToken(null);
     setUser(null);
-    setBooting(false);
-
-    // ✅ guest mode -> badge 0
-    cart?.useUserCart?.("");
-    fav?.useUserFav?.("");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+    }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        booting,
-        login,
-        register,
-        logout,
-        refreshMe,
-        updateMe,
-        resetPassword,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthCtx>(
+    () => ({ user, token, loading, login, logout }),
+    [user, token, loading]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  // ✅ Build/Prerender safety:
-  // In rare cases (or mis-wiring) context can be null/undefined.
-  // Returning a safe empty object prevents destructuring crashes.
-  return (
-    useContext(AuthContext) ||
-    ({
-      user: null,
-      booting: false,
-      login: async () => ({ ok: false, message: "AuthProvider missing" }),
-      register: async () => ({ ok: false, message: "AuthProvider missing" }),
-      logout: () => {},
-      refreshMe: async () => ({ ok: false, message: "AuthProvider missing" }),
-      updateMe: async () => ({ ok: false, message: "AuthProvider missing" }),
-      resetPassword: async () => ({ ok: false, message: "AuthProvider missing" }),
-    } as any)
-  );
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }
