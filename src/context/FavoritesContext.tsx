@@ -2,51 +2,36 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type CartItem = {
-  productId: string;
-  title: string;
-  price: number;
-  image: string;
-  variant?: string;
-  qty: number;
-};
+type FavoritesContextValue = {
+  favIds: string[];
+  useUserFav: (uidOrPhone?: string | null) => void;
 
-type CartContextValue = {
-  items: CartItem[];
-  add: (item: CartItem) => void;
-  inc: (productId: string, variant?: string) => void;
-  dec: (productId: string, variant?: string) => void;
-  remove: (productId: string, variant?: string) => void;
+  isFav: (id: any) => boolean;
+  toggle: (id: any) => void;
+  remove: (id: any) => void;
   clear: () => void;
-  cartCount: number;
-
-  buyNow: (product: any, variant?: string, qty?: number) => void;
-  checkoutItem: CartItem | null;
-  clearBuyNow: () => void;
-
-  // Optional (AuthContext call করছে)
-  useUserCart?: (uid: string) => void;
 };
 
-const CartContext = createContext<CartContextValue | null>(null);
+const FavoritesCtx = createContext<FavoritesContextValue | null>(null);
 
-const CART_KEY = "cart_items_v1";
-const BUY_KEY = "buy_now_item_v1";
+const LS_GUEST = "fav_guest";
+const userFavKey = (uid: any) => `fav_user_${String(uid || "").trim()}`;
 
-function safeParse(raw: string, fallback: any) {
+function safeParse<T>(raw: string, fallback: T): T {
   try {
     const v = JSON.parse(raw);
-    return v ?? fallback;
+    return (v ?? fallback) as T;
   } catch {
     return fallback;
   }
 }
 
 function loadKey<T>(key: string, fallback: T): T {
+  // ✅ localStorage শুধু browser এ থাকে
   if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (safeParse(raw, fallback) as T) : fallback;
+    return raw ? safeParse<T>(raw, fallback) : fallback;
   } catch {
     return fallback;
   }
@@ -59,137 +44,79 @@ function saveKey(key: string, value: any) {
   } catch {}
 }
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    const d = loadKey<any>(CART_KEY, []);
-    return Array.isArray(d) ? d : [];
+export function FavoritesProvider({ children }: { children: React.ReactNode }) {
+  const [activeKey, setActiveKey] = useState<string>(LS_GUEST);
+
+  const [favIds, setFavIds] = useState<string[]>(() => {
+    const d = loadKey<any>(LS_GUEST, []);
+    return Array.isArray(d) ? d.map(String) : [];
   });
 
-  const [checkoutItem, setCheckoutItem] = useState<CartItem | null>(() => {
-    const d = loadKey<any>(BUY_KEY, null);
-    return d && typeof d === "object" ? d : null;
-  });
-
-  // persist cart
+  // ✅ Persist to localStorage
   useEffect(() => {
-    saveKey(CART_KEY, items);
-  }, [items]);
+    saveKey(activeKey, favIds);
+  }, [favIds, activeKey]);
 
-  // persist buy item
-  useEffect(() => {
-    saveKey(BUY_KEY, checkoutItem);
-  }, [checkoutItem]);
+  const useUserFav = (uidOrPhone?: string | null) => {
+    const uid = String(uidOrPhone || "").trim();
 
-  const add = (item: CartItem) => {
-    const pid = String(item.productId || "");
-    const vname = String(item.variant || "");
-    if (!pid) return;
-
-    setItems((prev) => {
-      const i = prev.findIndex((x) => String(x.productId) === pid && String(x.variant || "") === vname);
-      if (i >= 0) {
-        const next = prev.map((x, idx) =>
-          idx === i ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 1) } : x
-        );
-        return next;
-      }
-      return [...prev, { ...item, productId: pid, variant: vname, qty: Number(item.qty || 1) }];
-    });
-  };
-
-  const inc = (productId: string, variant = "") => {
-    const pid = String(productId || "");
-    const vname = String(variant || "");
-    if (!pid) return;
-
-    setItems((prev) =>
-      prev.map((x) =>
-        String(x.productId) === pid && String(x.variant || "") === vname ? { ...x, qty: Number(x.qty || 0) + 1 } : x
-      )
-    );
-  };
-
-  const dec = (productId: string, variant = "") => {
-    const pid = String(productId || "");
-    const vname = String(variant || "");
-    if (!pid) return;
-
-    setItems((prev) =>
-      prev.map((x) =>
-        String(x.productId) === pid && String(x.variant || "") === vname
-          ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) }
-          : x
-      )
-    );
-  };
-
-  const remove = (productId: string, variant = "") => {
-    const pid = String(productId || "");
-    const vname = String(variant || "");
-    if (!pid) return;
-
-    setItems((prev) => prev.filter((x) => !(String(x.productId) === pid && String(x.variant || "") === vname)));
-  };
-
-  const clear = () => {
-    setItems([]);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(CART_KEY);
-      } catch {}
+    if (!uid) {
+      setActiveKey(LS_GUEST);
+      const gf = loadKey<any>(LS_GUEST, []);
+      setFavIds(Array.isArray(gf) ? gf.map(String) : []);
+      return;
     }
+
+    const k = userFavKey(uid);
+    setActiveKey(k);
+    const uf = loadKey<any>(k, []);
+    setFavIds(Array.isArray(uf) ? uf.map(String) : []);
   };
 
-  const buyNow = (product: any, variant = "", qty = 1) => {
-    const pid = String(product?._id ?? product?.id ?? product?.productId ?? "");
-    if (!pid) return;
+  const value = useMemo<FavoritesContextValue>(
+    () => ({
+      favIds,
+      useUserFav,
 
-    const one: CartItem = {
-      productId: pid,
-      title: String(product?.title ?? ""),
-      price: Number(product?.price ?? 0),
-      image: String(product?.images?.[0] ?? product?.image ?? "https://via.placeholder.com/300"),
-      variant: String(variant || ""),
-      qty: Math.max(1, Number(qty || 1)),
-    };
+      isFav(id: any) {
+        const s = String(id);
+        return favIds.includes(s);
+      },
 
-    setCheckoutItem(one);
-  };
+      toggle(id: any) {
+        const s = String(id);
+        setFavIds((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+      },
 
-  const clearBuyNow = () => {
-    setCheckoutItem(null);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(BUY_KEY);
-      } catch {}
-    }
-  };
+      remove(id: any) {
+        const s = String(id);
+        setFavIds((prev) => prev.filter((x) => x !== s));
+      },
 
-  const cartCount = useMemo(() => items.reduce((s, x) => s + (Number(x.qty || 0) || 0), 0), [items]);
+      clear() {
+        setFavIds([]);
+      },
+    }),
+    [favIds]
+  );
 
-  // AuthContext call করে, but currently you store 1 cart for all users. Keep as no-op for compatibility.
-  const useUserCart = (_uid: string) => {
-    // If in future you want per-user cart, implement key switching here.
-    return;
-  };
-
-  const value: CartContextValue = {
-    items,
-    add,
-    inc,
-    dec,
-    remove,
-    clear,
-    cartCount,
-    buyNow,
-    checkoutItem,
-    clearBuyNow,
-    useUserCart,
-  };
-
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return <FavoritesCtx.Provider value={value}>{children}</FavoritesCtx.Provider>;
 }
 
-export function useCart() {
-  return useContext(CartContext) || ({} as CartContextValue);
+export function useFavorites(): FavoritesContextValue {
+  const ctx = useContext(FavoritesCtx);
+
+  // ✅ Provider missing হলেও crash করবে না
+  if (!ctx) {
+    return {
+      favIds: [],
+      useUserFav: () => {},
+      isFav: () => false,
+      toggle: () => {},
+      remove: () => {},
+      clear: () => {},
+    };
+  }
+
+  return ctx;
 }
