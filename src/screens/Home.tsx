@@ -11,13 +11,13 @@ import { Helmet } from "react-helmet-async";
 export default function Home() {
   const nav = useNavigate();
 
-  const [cats, setCats] = useState([]);
-  const [allProducts, setAllProducts] = useState([]);
-  const [banners, setBanners] = useState([]);
+  const [cats, setCats] = useState<any[]>([]);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [banners, setBanners] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [slide, setSlide] = useState(0);
 
-  const absUrl = (u) => {
+  const absUrl = (u: any) => {
     if (!u) return "";
     const s = String(u);
     if (s.startsWith("http://") || s.startsWith("https://")) return s;
@@ -25,7 +25,7 @@ export default function Home() {
   };
 
   const bannerUrls = useMemo(() => {
-    return (banners || [])
+    return (Array.isArray(banners) ? banners : [])
       .map((b) => (typeof b === "string" ? b : b?.url))
       .map(absUrl)
       .filter(Boolean);
@@ -46,15 +46,22 @@ export default function Home() {
 
         if (!alive) return;
 
-        if (c?.ok) setCats(c.categories || []);
-        if (r?.ok) setBanners(r.banners || []);
-        if (p?.ok) setAllProducts(p.products || []);
+        // ✅ always set arrays (never set object)
+        const catList = Array.isArray(c?.categories) ? c.categories : [];
+        const bannerList = Array.isArray(r?.banners) ? r.banners : [];
+        const prodList = Array.isArray(p?.products) ? p.products : [];
+
+        setCats(catList);
+        setBanners(bannerList);
+        setAllProducts(prodList);
       } finally {
         if (alive) setLoading(false);
       }
     })();
 
-    return () => (alive = false);
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -63,19 +70,30 @@ export default function Home() {
     return () => clearInterval(id);
   }, [bannerUrls.length]);
 
-  // products group by category
+  // ✅ group products by categoryId (support _id OR id)
   const byCat = useMemo(() => {
-    const map = new Map();
-    for (const p of allProducts) {
-      const cid = p?.category?._id;
-      if (!cid) continue;
-      if (!map.has(cid)) map.set(cid, []);
-      map.get(cid).push(p);
+    const map = new Map<string, any[]>();
+    for (const p of Array.isArray(allProducts) ? allProducts : []) {
+      const cid =
+        p?.category?._id ??
+        p?.category?.id ??
+        p?.categoryId ??
+        p?.category ??
+        null;
+
+      const key = cid ? String(cid) : "";
+      if (!key) continue;
+
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(p);
     }
     return map;
   }, [allProducts]);
 
-return (
+  // ✅ helper: get category id safely
+  const getCatId = (c: any) => String(c?._id ?? c?.id ?? c?.categoryId ?? c?.slug ?? "");
+
+  return (
     <div className="page-enter">
       <Helmet>
         <title>The Curious Empire | Premium Shopping Experience In Bangladesh</title>
@@ -87,7 +105,6 @@ return (
 
         <link rel="canonical" href="https://thecuriousempire.com/" />
 
-        {/* Open Graph */}
         <meta property="og:title" content="The Curious Empire | Premium Shopping Experience In Bangladesh" />
         <meta
           property="og:description"
@@ -102,10 +119,7 @@ return (
         {/* ===== BANNER ===== */}
         {bannerUrls.length > 0 && (
           <div className="homeBanner">
-            <div
-              className="bannerSlideTrack"
-              style={{ transform: `translateX(-${slide * 100}%)` }}
-            >
+            <div className="bannerSlideTrack" style={{ transform: `translateX(-${slide * 100}%)` }}>
               {bannerUrls.map((url, i) => (
                 <div className="bannerSlide" key={i}>
                   <img src={url} className="bannerImg" alt="Banner" />
@@ -128,7 +142,6 @@ return (
           </div>
         )}
 
-        {/* ===== TEXT BELOW BANNER ===== */}
         <div className="homeHeroText">
           <div className="homeHeroTitle">Welcome To The Curious Empire</div>
           <div className="homeHeroSub">Premium Shopping Experience – Your Curiosity, Our Collection🎪</div>
@@ -142,22 +155,27 @@ return (
             Loading...
           </div>
         ) : cats.length === 0 ? null : (
-          cats.map((c) => {
-            const items = byCat.get(c._id) || [];
+          (Array.isArray(cats) ? cats : []).map((c) => {
+            const cid = getCatId(c);
+            if (!cid) return null;
+
+            const items = byCat.get(cid) || [];
             if (!items.length) return null;
 
+            const key = cid; // stable key
+
             return (
-              <div key={c._id} style={{ marginTop: 14 }}>
+              <div key={key} style={{ marginTop: 14 }}>
                 <div className="rowBetween" style={{ marginBottom: 10 }}>
-                  <h3 style={{ margin: 0, fontWeight: 900 }}>{c.name}</h3>
-                  <Link className="seeMore" to={`/shop?category=${c.slug || c._id}`}>
+                  <h3 style={{ margin: 0, fontWeight: 900 }}>{c?.name}</h3>
+                  <Link className="seeMore" to={`/shop?category=${c?.slug || cid}`}>
                     See More →
                   </Link>
                 </div>
 
                 <div className="homeTwoGrid">
-                  {items.slice(0, 4).map((p) => (
-                    <ProductCard key={p._id} p={p} />
+                  {items.slice(0, 4).map((p: any) => (
+                    <ProductCard key={p?._id ?? p?.id ?? p?.slug ?? JSON.stringify(p)} p={p} />
                   ))}
                 </div>
               </div>
