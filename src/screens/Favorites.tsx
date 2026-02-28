@@ -12,7 +12,6 @@ import { useCart } from "../context/CartContext";
 import { api } from "../api/api";
 import useNoIndex from "../utils/useNoIndex";
 
-
 export default function Favorites() {
   useNoIndex("noindex, nofollow");
   const nav = useNavigate();
@@ -20,7 +19,6 @@ export default function Favorites() {
   const fav = useFavorites();
   const { user } = useAuth();
   const { buyNow } = useCart();
-
 
   // ✅ admin panel এ hide
   if (pathname.startsWith("/admin")) return null;
@@ -31,6 +29,12 @@ export default function Favorites() {
   const [products, setProducts] = useState([]);
 
   const formatBDT = (n) => `৳ ${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
+
+  // ✅ helper: product এ variant থাকলে first variant pick করবে
+  const pickVariant = (p) => {
+    const v = p?.variants?.[0]?.name;
+    return v ? String(v) : "";
+  };
 
   // ✅ favIds পরিবর্তন হলে product details load
   useEffect(() => {
@@ -101,7 +105,8 @@ export default function Favorites() {
     if (!user) return nav("/login");
 
     if (firstFavProduct?._id) {
-      buyNow(firstFavProduct, "", 1);
+      const v = pickVariant(firstFavProduct); // ✅ FIX: empty variant না পাঠিয়ে first variant পাঠানো
+      buyNow(firstFavProduct, v, 1);
       nav("/checkout?mode=buy");
       return;
     }
@@ -180,6 +185,20 @@ export default function Favorites() {
                         <Link to={`/product/${id}`} className="favViewBtn">
                           View
                         </Link>
+
+                        {/* ✅ Optional: প্রতিটা favorite item থেকে direct Buy Now */}
+                        <button
+                          type="button"
+                          className="favPrimaryBtn"
+                          onClick={() => {
+                            if (!user) return nav("/login");
+                            const v = pickVariant(p); // ✅ FIX: first variant
+                            buyNow(p, v, 1);
+                            nav("/checkout?mode=buy");
+                          }}
+                        >
+                          Buy Now
+                        </button>
 
                         <button type="button" className="favRemoveBtn" onClick={() => doRemove(id)}>
                           Remove
