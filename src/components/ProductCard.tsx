@@ -77,7 +77,7 @@ export default function ProductCard({ p }: { p: any }) {
       title: p?.title || "",
       price: Number(p?.price || 0),
       image: img,
-      variant: "",
+      variant: String(p?.variants?.[0]?.name || ""),
       qty: 1,
     });
 
