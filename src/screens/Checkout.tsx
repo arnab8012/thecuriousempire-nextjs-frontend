@@ -1,9 +1,5 @@
 "use client";
 
-// ✅ Next.js (App Router) version of your old Vite Checkout.jsx
-// ✅ Same localStorage book system + DB save (PUT /api/auth/me)
-// ✅ Replace-ready: app/(whatever)/checkout/Checkout.tsx  or  src/screens/Checkout.tsx
-
 import "../styles/checkout.css";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -24,6 +20,10 @@ const DIVISIONS = [
 ];
 
 const BOOK_KEY = "shipping_book_v1";
+
+// CartContext keys (তোমার CartContext এ দেওয়া)
+const CART_KEY = "cart_items_v1";
+const BUY_KEY = "buy_now_item_v1";
 
 type Shipping = {
   fullName: string;
@@ -71,17 +71,57 @@ function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
-function loadBook(): Book {
+function isShipMeaningful(s: any) {
+  if (!s) return false;
+  const fullName = String(s.fullName || "").trim();
+  const phone1 = String(s.phone1 || "").trim();
+  const district = String(s.district || "").trim();
+  const upazila = String(s.upazila || "").trim();
+  const addressLine = String(s.addressLine || "").trim();
+  // ✅ minimal required (তোমার backend shipping validation মতো)
+  return !!(fullName && phone1 && district && upazila && addressLine);
+}
+
+function loadBookClean(): Book {
   if (typeof window === "undefined") return { selectedId: "", items: [] };
 
   try {
-    const b = JSON.parse(localStorage.getItem(BOOK_KEY) || "{}");
-    return {
-      selectedId: b?.selectedId || "",
-      items: Array.isArray(b?.items) ? b.items : [],
-    };
+    const raw = localStorage.getItem(BOOK_KEY) || "";
+    const b = raw ? JSON.parse(raw) : {};
+    const items: BookItem[] = Array.isArray(b?.items) ? b.items : [];
+
+    // ✅ remove blank addresses from book
+    const cleanedItems = items.filter((x) => isShipMeaningful(x?.shipping));
+
+    // ✅ if book had only blank -> wipe it
+    if (items.length > 0 && cleanedItems.length === 0) {
+      localStorage.removeItem(BOOK_KEY);
+      return { selectedId: "", items: [] };
+    }
+
+    const selectedId = String(b?.selectedId || "");
+    // ✅ if selectedId points to removed item -> fallback first
+    const selectedExists = cleanedItems.some((x) => x.id === selectedId);
+    const sid = selectedExists ? selectedId : cleanedItems[0]?.id || "";
+
+    // ✅ persist cleaned book back (so problem never returns)
+    const next = { selectedId: sid, items: cleanedItems };
+    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+
+    return next;
   } catch {
     return { selectedId: "", items: [] };
+  }
+}
+
+function safeJsonGet(key: string, fallback: any) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
   }
 }
 
@@ -90,31 +130,28 @@ export default function Checkout() {
 
   const router = useRouter();
   const sp = useSearchParams();
-
   const buyMode = sp.get("mode") === "buy";
 
   const cart = useCart() as any;
   const { user } = useAuth() as any;
 
   const token = api.token();
+  const deliveryCharge = 110;
 
-  // ✅ ADD: DB-তে shippingAddress save করার helper (legacy single object)
+  // ✅ legacy single shippingAddress save (তোমার backend PUT /api/auth/me handle করে)
   const saveShippingToDB = async (ship: Shipping) => {
     if (!token) return { ok: false, message: "No token" };
-    // backend route: PUT /api/auth/me  body: { shippingAddress: ship }
-    // (তোমার backend এ /me আছে)
     return await api.putAuth("/api/auth/me", token, { shippingAddress: ship });
   };
 
-  const [book, setBook] = useState<Book>(() => loadBook());
+  const [book, setBook] = useState<Book>(() => loadBookClean());
   const [useNew, setUseNew] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string>(book.selectedId || "");
   const [shipping, setShipping] = useState<Shipping>(() => emptyShipping(user));
 
   const [paymentMethod, setPaymentMethod] = useState<"COD" | "FULL_PAYMENT">("COD");
-  const deliveryCharge = 110;
 
-  // ✅ orderItems: buyMode হলে শুধু checkoutItem, না হলে cart items
+  // ✅ orderItems (UI show) - context first
   const orderItems = useMemo(() => {
     if (buyMode) return cart?.checkoutItem ? [cart.checkoutItem] : [];
     return Array.isArray(cart?.items) ? cart.items : [];
@@ -129,19 +166,20 @@ export default function Checkout() {
 
   const total = subTotal + deliveryCharge;
 
-  // ✅ when user loads / book changes -> set initial shipping
+  // ✅ initial load: book -> else DB shippingAddress
   useEffect(() => {
-    const b = loadBook();
+    const b = loadBookClean();
     setBook(b);
 
     const sid = b.selectedId || b.items?.[0]?.id || "";
     setSelectedId(sid);
 
     if (!sid) {
-      // 🔥 FIX: localStorage না থাকলে DB address ব্যবহার করো
-      if (user?.shippingAddress && Object.keys(user.shippingAddress).length > 0) {
+      // ✅ book নেই -> DB address দেখাও
+      const dbShip = user?.shippingAddress;
+      if (dbShip && isShipMeaningful(dbShip)) {
         setUseNew(false);
-        setShipping({ ...emptyShipping(user), ...(user.shippingAddress as Shipping) });
+        setShipping({ ...emptyShipping(user), ...(dbShip as Shipping) });
       } else {
         setUseNew(true);
         setShipping(emptyShipping(user));
@@ -150,27 +188,170 @@ export default function Checkout() {
     }
 
     const found = b.items.find((x) => x.id === sid);
-    if (found?.shipping) {
+    if (found?.shipping && isShipMeaningful(found.shipping)) {
       setUseNew(false);
       setShipping({ ...emptyShipping(user), ...found.shipping });
     } else {
-      setUseNew(true);
-      setShipping(emptyShipping(user));
+      // ✅ selected blank হলে DB fallback
+      const dbShip = user?.shippingAddress;
+      if (dbShip && isShipMeaningful(dbShip)) {
+        setUseNew(false);
+        setShipping({ ...emptyShipping(user), ...(dbShip as Shipping) });
+      } else {
+        setUseNew(true);
+        setShipping(emptyShipping(user));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?._id || user?.id]);
 
-  // ✅ when selectedId changes -> update shipping from book (only if not useNew)
+  // ✅ when selecting saved item
   useEffect(() => {
     if (useNew) return;
     const found = book.items.find((x) => x.id === selectedId);
-    if (found?.shipping) {
+    if (found?.shipping && isShipMeaningful(found.shipping)) {
       setShipping({ ...emptyShipping(user), ...found.shipping });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, useNew, book.items, user]);
+  }, [selectedId, useNew, book.items]);
 
-  // ✅ buyMode: checkoutItem না থাকলে user কে shop/cart এ পাঠাবে
+  const validateShipping = () => {
+    if (!String(shipping.fullName || "").trim()) return "Name required";
+    if (!String(shipping.phone1 || "").trim()) return "Phone required";
+    if (!String(shipping.division || "").trim()) return "Division required";
+    if (!String(shipping.district || "").trim()) return "District required";
+    if (!String(shipping.upazila || "").trim()) return "Upazila/Thana required";
+    if (!String(shipping.addressLine || "").trim()) return "Address required";
+    return "";
+  };
+
+  const saveToBook = (ship: Shipping) => {
+    if (!isShipMeaningful(ship)) return; // ✅ never save blank
+
+    const current = loadBookClean();
+
+    // update existing
+    if (!useNew && selectedId) {
+      const nextItems = current.items.map((x) =>
+        x.id === selectedId ? { ...x, shipping: ship, label: x.label || makeLabel(ship) } : x
+      );
+      const next = { ...current, selectedId, items: nextItems };
+      localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+      setBook(next);
+      return;
+    }
+
+    // create new
+    const id = uid();
+    const nextItems = [{ id, label: makeLabel(ship), shipping: ship }, ...(current.items || [])];
+    const next = { selectedId: id, items: nextItems };
+
+    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+    setBook(next);
+    setSelectedId(id);
+    setUseNew(false);
+  };
+
+  const deleteAddress = (id: string) => {
+    const current = loadBookClean();
+    const nextItems = (current.items || []).filter((x) => x.id !== id);
+    const nextSelected = current.selectedId === id ? nextItems[0]?.id || "" : current.selectedId;
+
+    const next = { selectedId: nextSelected, items: nextItems };
+    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+
+    setBook(next);
+    setSelectedId(nextSelected);
+
+    if (!nextSelected) {
+      // ✅ fallback to DB
+      const dbShip = user?.shippingAddress;
+      if (dbShip && isShipMeaningful(dbShip)) {
+        setUseNew(false);
+        setShipping({ ...emptyShipping(user), ...(dbShip as Shipping) });
+      } else {
+        setUseNew(true);
+        setShipping(emptyShipping(user));
+      }
+    } else {
+      setUseNew(false);
+      const found = nextItems.find((x) => x.id === nextSelected);
+      if (found?.shipping && isShipMeaningful(found.shipping)) {
+        setShipping({ ...emptyShipping(user), ...found.shipping });
+      }
+    }
+  };
+
+  // ✅ HARD FIX for "No items": build items from context OR localStorage at click time
+  const buildFinalItems = () => {
+    // 1) context
+    let list: any[] = [];
+    if (buyMode) {
+      if (cart?.checkoutItem) list = [cart.checkoutItem];
+    } else {
+      if (Array.isArray(cart?.items)) list = cart.items;
+    }
+
+    // 2) fallback localStorage (when context empty)
+    if (!list.length) {
+      if (buyMode) {
+        const one = safeJsonGet(BUY_KEY, null);
+        if (one) list = [one];
+      } else {
+        const arr = safeJsonGet(CART_KEY, []);
+        if (Array.isArray(arr)) list = arr;
+      }
+    }
+
+    // normalize payload items
+    const payloadItems = (list || [])
+      .map((x: any) => ({
+        productId: String(x?.productId || x?._id || x?.id || "").trim(),
+        qty: Math.max(1, Number(x?.qty || 1)),
+        variant: String(x?.variant || ""),
+      }))
+      .filter((x) => !!x.productId); // ✅ remove invalid
+
+    return payloadItems;
+  };
+
+  const placeOrder = async () => {
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const m = validateShipping();
+    if (m) return alert(m);
+
+    // ✅ items build (context OR localStorage)
+    const finalItems = buildFinalItems();
+    if (!finalItems.length) return alert("No items"); // ✅ same message, but now real
+
+    // ✅ save shipping to DB (legacy single)
+    const db = await saveShippingToDB(shipping);
+    if (!db?.ok) return alert(db?.message || "Address DB save failed");
+
+    // ✅ local book save
+    saveToBook(shipping);
+
+    const payload = {
+      items: finalItems,
+      shipping,
+      paymentMethod,
+    };
+
+    const r = await api.postAuth("/api/orders", token, payload);
+    if (!r?.ok) return alert(r?.message || "Order failed");
+
+    if (buyMode) cart?.clearBuyNow?.();
+    else cart?.clear?.();
+
+    alert("✅ Order placed!");
+    router.push("/profile");
+  };
+
+  // ✅ UI guard (only for UI)
   if (!orderItems.length) {
     return (
       <div className="container">
@@ -185,103 +366,6 @@ export default function Checkout() {
       </div>
     );
   }
-
-  const validateShipping = () => {
-    if (!shipping.fullName) return "Name required";
-    if (!shipping.phone1) return "Phone required";
-    if (!shipping.division) return "Division required";
-    if (!shipping.district) return "District required";
-    if (!shipping.upazila) return "Upazila/Thana required";
-    if (!shipping.addressLine) return "Address required";
-    return "";
-  };
-
-  const saveToBook = (ship: Shipping) => {
-    const current = loadBook();
-
-    // update existing saved
-    if (!useNew && selectedId) {
-      const nextItems = current.items.map((x) =>
-        x.id === selectedId ? { ...x, shipping: ship, label: x.label || makeLabel(ship) } : x
-      );
-
-      const next = { ...current, selectedId, items: nextItems };
-      localStorage.setItem(BOOK_KEY, JSON.stringify(next));
-      setBook(next);
-      return;
-    }
-
-    // create new saved
-    const id = uid();
-    const nextItems = [{ id, label: makeLabel(ship), shipping: ship }, ...(current.items || [])];
-
-    const next = { selectedId: id, items: nextItems };
-    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
-
-    setBook(next);
-    setSelectedId(id);
-    setUseNew(false);
-  };
-
-  const deleteAddress = (id: string) => {
-    const current = loadBook();
-    const nextItems = (current.items || []).filter((x) => x.id !== id);
-
-    const nextSelected = current.selectedId === id ? nextItems[0]?.id || "" : current.selectedId;
-
-    const next = { selectedId: nextSelected, items: nextItems };
-    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
-
-    setBook(next);
-    setSelectedId(nextSelected);
-
-    if (!nextSelected) {
-      setUseNew(true);
-      setShipping(emptyShipping(user));
-    } else {
-      setUseNew(false);
-      const found = nextItems.find((x) => x.id === nextSelected);
-      if (found?.shipping) setShipping({ ...emptyShipping(user), ...found.shipping });
-    }
-  };
-
-  const placeOrder = async () => {
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    const m = validateShipping();
-    if (m) return alert(m);
-
-    // ✅ DB-তে shippingAddress save (multi-device fix)
-    const db = await saveShippingToDB(shipping);
-    if (!db?.ok) return alert(db?.message || "Address DB save failed");
-
-    // ✅ local book save (same as old)
-    saveToBook(shipping);
-
-    // ✅ FIX (No items issue): productId fallback (_id / id) + qty ensure number
-    const payload = {
-      items: orderItems.map((x: any) => ({
-        productId: x?.productId || x?._id || x?.id,
-        qty: Number(x?.qty || 1),
-        variant: x?.variant || "",
-      })),
-      shipping,
-      paymentMethod,
-    };
-
-    // ✅ Next.js version: postAuth
-    const r = await api.postAuth("/api/orders", token, payload);
-    if (!r?.ok) return alert(r?.message || "Order failed");
-
-    if (buyMode) cart?.clearBuyNow?.();
-    else cart?.clear?.();
-
-    alert("✅ Order placed!");
-    router.push("/profile");
-  };
 
   return (
     <div className="container">
