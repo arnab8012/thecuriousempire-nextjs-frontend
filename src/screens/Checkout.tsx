@@ -227,8 +227,7 @@ export default function Checkout() {
     const current = loadBook();
     const nextItems = (current.items || []).filter((x) => x.id !== id);
 
-    const nextSelected =
-      current.selectedId === id ? nextItems[0]?.id || "" : current.selectedId;
+    const nextSelected = current.selectedId === id ? nextItems[0]?.id || "" : current.selectedId;
 
     const next = { selectedId: nextSelected, items: nextItems };
     localStorage.setItem(BOOK_KEY, JSON.stringify(next));
@@ -262,11 +261,12 @@ export default function Checkout() {
     // ✅ local book save (same as old)
     saveToBook(shipping);
 
+    // ✅ FIX (No items issue): productId fallback (_id / id) + qty ensure number
     const payload = {
       items: orderItems.map((x: any) => ({
-        productId: x.productId,
-        qty: x.qty,
-        variant: x.variant,
+        productId: x?.productId || x?._id || x?.id,
+        qty: Number(x?.qty || 1),
+        variant: x?.variant || "",
       })),
       shipping,
       paymentMethod,
