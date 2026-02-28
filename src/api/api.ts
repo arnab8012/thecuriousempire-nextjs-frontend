@@ -1,12 +1,18 @@
 "use client";
 
-const BASE = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, ""); // শেষের / কেটে দেয়
+const BASE = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "");
 
 async function request(path: string, options: RequestInit = {}) {
+  if (!BASE) {
+    return {
+      ok: false,
+      message: "NEXT_PUBLIC_API_BASE is missing. Set it to https://api.thecuriousempire.com",
+    };
+  }
+
   const url = `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const res = await fetch(url, {
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
@@ -32,34 +38,21 @@ function safeToken() {
 }
 
 export const api = {
-  // ✅ expose BASE (Home এর absUrl এ api.BASE দরকার)
   BASE,
-
-  // ✅ token helper (PrivateRoute/ProtectedRoute এর জন্য MUST)
   token: safeToken,
 
   get: (path: string) => request(path, { method: "GET" }),
 
   post: (path: string, body?: any) =>
-    request(path, {
-      method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
-    }),
+    request(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
 
   put: (path: string, body?: any) =>
-    request(path, {
-      method: "PUT",
-      body: body ? JSON.stringify(body) : undefined,
-    }),
+    request(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
 
   delete: (path: string) => request(path, { method: "DELETE" }),
 
-  // 🔐 With token (Authorization header)
   getAuth: (path: string, token: string) =>
-    request(path, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+    request(path, { method: "GET", headers: { Authorization: `Bearer ${token}` } }),
 
   postAuth: (path: string, token: string, body?: any) =>
     request(path, {
@@ -76,8 +69,5 @@ export const api = {
     }),
 
   deleteAuth: (path: string, token: string) =>
-    request(path, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+    request(path, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }),
 };
