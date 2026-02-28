@@ -6,18 +6,20 @@ async function request(path: string, options: RequestInit = {}) {
   if (!BASE) {
     return {
       ok: false,
-      message: "NEXT_PUBLIC_API_BASE is missing. Set it to https://api.thecuriousempire.com",
+      message: "NEXT_PUBLIC_API_BASE missing. Set it to https://api.thecuriousempire.com",
     };
   }
 
   const url = `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
+  // ✅ FIX: ...options আগে, headers পরে => Content-Type কখনো হারাবে না
   const res = await fetch(url, {
+    ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-    ...options,
   });
 
   const text = await res.text();
