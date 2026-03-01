@@ -7,29 +7,34 @@ export const revalidate = 60;
 
 async function getProduct(id: string) {
   try {
-    const base = process.env.API_BASE;
-    if (!base) return null;
+    const base = process.env.API_BASE || "https://api.thecuriousempire.com";
 
     const res = await fetch(`${base}/api/products/${id}`, {
+      // revalidate = 60 এর সাথে এটা রাখাই safe
       next: { revalidate: 60 },
+      headers: { Accept: "application/json" },
     });
 
-    if (!res.ok) return null;
-
     const text = await res.text();
-    if (!text) return null;
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
+    if (!res.ok) {
+      console.error("API status:", res.status, text?.slice(0, 120));
       return null;
     }
 
-    if (!data?.ok || !data?.product) return null;
+    if (!text) return null;
 
-    return data.product;
-  } catch {
+    let data: any = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("API returned non-JSON:", text?.slice(0, 200));
+      return null;
+    }
+
+    return data?.ok ? data.product : null;
+  } catch (e) {
+    console.error("getProduct error:", e);
     return null;
   }
 }
@@ -37,66 +42,52 @@ async function getProduct(id: string) {
 export async function generateMetadata(
   { params }: { params: { id: string } }
 ): Promise<Metadata> {
-  try {
-    const p = await getProduct(params.id);
+  const p = await getProduct(params.id);
 
-    const url = `https://thecuriousempire.com/product/${params.id}`;
-
-    if (!p) {
-      return {
-        title: "Product not found",
-        description: "Product not available.",
-        alternates: { canonical: url },
-      };
-    }
-
-    const title = String(p?.title || "Product");
-    const desc = String(p?.description || "")
-      .replace(/\s+/g, " ")
-      .slice(0, 160);
-
-    const image =
-      Array.isArray(p?.images) && p.images.length
-        ? p.images[0]
-        : "https://thecuriousempire.com/logo.png";
-
+  if (!p) {
     return {
-      title,
-      description: desc,
-      alternates: { canonical: url },
-      openGraph: {
-        title,
-        description: desc,
-        url,
-        siteName: "The Curious Empire",
-        images: [{ url: image }],
-        type: "product",
-      },
-      twitter: {
-        card: "summary_large_image",
-        title,
-        description: desc,
-        images: [image],
-      },
-    };
-  } catch {
-    return {
-      title: "Product",
-      description: "Product page",
+      title: "Product not found",
+      description: "This product is not available.",
+      alternates: { canonical: `https://thecuriousempire.com/product/${params.id}` },
     };
   }
+
+  // ❗RootLayout এ template already আছে:
+  // template: "%s | The Curious Empire"
+  // তাই এখানে আর "| The Curious Empire" যোগ করো না (ডাবল হয়)
+  const title = String(p.title || "Product");
+  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
+  const image =
+    Array.isArray(p.images) && p.images[0] ? p.images[0] : "https://thecuriousempire.com/logo.png";
+  const url = `https://thecuriousempire.com/product/${params.id}`;
+
+  return {
+    title,
+    description: desc,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description: desc,
+      url,
+      siteName: "The Curious Empire",
+      images: [{ url: image }],
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: desc,
+      images: [image],
+    },
+  };
 }
 
-export default async function Page({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function Page({ params }: { params: { id: string } }) {
   const product = await getProduct(params.id);
 
   if (!product) {
     return (
-      <div style={{ padding: 20 }}>
+      <div className="container" style={{ padding: 20 }}>
         Product not found
       </div>
     );
