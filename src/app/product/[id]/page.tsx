@@ -1,7 +1,9 @@
 // src/app/product/[id]/page.tsx
 
-import ProductDetails from "@/screens/ProductDetails";
 import type { Metadata } from "next";
+import ProductDetails from "@/screens/ProductDetails";
+
+export const revalidate = 60;
 
 async function getProduct(id: string) {
   try {
@@ -21,6 +23,28 @@ async function getProduct(id: string) {
   }
 }
 
-// 🔥 IMPORTANT: metadata এ আর API call করবো না
+// ✅ SEO safe (এখানে API call নাই)
 export async function generateMetadata(
-  { params }: { params: { id:
+  { params }: { params: { id: string } }
+): Promise<Metadata> {
+  return {
+    title: "Product | The Curious Empire",
+    description: "Buy premium products online from The Curious Empire.",
+  };
+}
+
+export default async function Page(
+  { params }: { params: { id: string } }
+) {
+  const product = await getProduct(params.id);
+
+  if (!product) {
+    return (
+      <div className="container" style={{ padding: 20 }}>
+        Product not found
+      </div>
+    );
+  }
+
+  return <ProductDetails id={params.id} product={product} />;
+}
