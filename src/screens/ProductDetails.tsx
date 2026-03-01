@@ -7,6 +7,7 @@ import { api } from "../api/api";
 
 type ProductDetailsProps = {
   id?: string;
+  product?: any; // ✅ server থেকে আসবে (SEO fix)
 };
 
 const FALLBACK_IMG = "https://via.placeholder.com/800x500?text=Product";
@@ -24,7 +25,7 @@ function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
 
-export default function ProductDetails({ id }: ProductDetailsProps) {
+export default function ProductDetails({ id, product }: ProductDetailsProps) {
   const router = useRouter();
 
   // ✅ Hook must be called normally (no condition)
@@ -32,9 +33,10 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
   const add = cart?.add;
   const buyNow = cart?.buyNow;
 
-  const [p, setP] = useState<any>(null);
+  // ✅ IMPORTANT: server থেকে product এলে সেটাই initial state
+  const [p, setP] = useState<any>(product || null);
   const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(!product); // product থাকলে loading false
 
   const [idx, setIdx] = useState(0);
   const [variant, setVariant] = useState("");
@@ -50,9 +52,27 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
     } catch {}
   };
 
-  // ✅ product fetch
+  // ✅ when product prop changes (route change), sync it
+  useEffect(() => {
+    if (product) {
+      setP(product);
+
+      const firstVar = product?.variants?.[0]?.name || "";
+      setVariant(firstVar);
+      setQty(1);
+      setIdx(0);
+
+      setErr("");
+      setLoading(false);
+    }
+  }, [product]);
+
+  // ✅ fallback fetch ONLY when product not provided (safe)
   useEffect(() => {
     let alive = true;
+
+    // যদি server থেকে product এসেছে, fetch লাগবে না
+    if (product) return;
 
     if (!id) {
       setErr("Missing product id");
@@ -94,7 +114,7 @@ export default function ProductDetails({ id }: ProductDetailsProps) {
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, product]);
 
   const imgs = useMemo(() => {
     const arr = safeArray<string>(p?.images).filter(Boolean);
