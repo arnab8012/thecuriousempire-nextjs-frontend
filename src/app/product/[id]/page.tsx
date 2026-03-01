@@ -1,3 +1,5 @@
+// src/app/product/[id]/page.tsx
+
 import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
@@ -6,21 +8,28 @@ async function getProduct(id: string) {
   try {
     const base = process.env.API_BASE;
 
-    if (!base) {
-      console.error("API_BASE missing");
-      return null;
-    }
+    if (!base) return null;
 
     const res = await fetch(`${base}/api/products/${id}`, {
       cache: "no-store",
     });
 
+    const text = await res.text();
+
     if (!res.ok) {
-      console.error("Fetch failed:", res.status);
+      console.error("Fetch status error:", res.status);
       return null;
     }
 
-    const data = await res.json();
+    if (!text) return null;
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error("Invalid JSON from API");
+      return null;
+    }
 
     return data?.ok ? data.product : null;
   } catch (err) {
@@ -39,19 +48,9 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
     };
   }
 
-  const title = p.title;
-  const desc = String(p.description || "").slice(0, 160);
-  const img = p.images?.[0];
-
   return {
-    title,
-    description: desc,
-    openGraph: {
-      title,
-      description: desc,
-      images: img ? [{ url: img }] : [],
-      type: "product",
-    },
+    title: p.title,
+    description: String(p.description || "").slice(0, 160),
   };
 }
 
