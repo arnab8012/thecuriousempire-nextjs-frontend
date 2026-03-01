@@ -1,12 +1,18 @@
+// src/app/product/[id]/page.tsx
 import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
 
 async function getProduct(id: string) {
-  const base = process.env.API_BASE || "https://api.thecuriousempire.com";
-  const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
+  const base =
+    process.env.API_BASE ||
+    process.env.NEXT_PUBLIC_API_BASE ||
+    "https://api.thecuriousempire.com";
 
-  // যদি 404/500 হয়, crash না করে null return
+  const res = await fetch(`${base}/api/products/${id}`, {
+    next: { revalidate: 60 },
+  });
+
   if (!res.ok) return null;
 
   const data = await res.json();
@@ -16,7 +22,9 @@ async function getProduct(id: string) {
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const p = await getProduct(params.id);
 
-  if (!p) return { title: "Product not found" };
+  if (!p) {
+    return { title: "Product not found" };
+  }
 
   const title = p.title;
   const desc = String(p.description || "").slice(0, 160);
