@@ -1,4 +1,3 @@
-// src/app/product/[id]/page.tsx
 import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
