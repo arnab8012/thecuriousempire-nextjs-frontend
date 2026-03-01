@@ -3,28 +3,41 @@ import ProductDetails from "@/screens/ProductDetails";
 export const revalidate = 60;
 
 async function getProduct(id: string) {
-  const base = process.env.API_BASE; // ✅ শুধু এটা ব্যবহার করো
+  try {
+    const base = process.env.API_BASE;
 
-  if (!base) {
-    throw new Error("API_BASE missing");
-  }
+    if (!base) {
+      console.error("API_BASE missing");
+      return null;
+    }
 
-  const res = await fetch(`${base}/api/products/${id}`, {
-    cache: "no-store",
-  });
+    const res = await fetch(`${base}/api/products/${id}`, {
+      cache: "no-store",
+    });
 
-  if (!res.ok) {
+    if (!res.ok) {
+      console.error("Fetch failed:", res.status);
+      return null;
+    }
+
+    const data = await res.json();
+
+    return data?.ok ? data.product : null;
+  } catch (err) {
+    console.error("Server fetch error:", err);
     return null;
   }
-
-  const data = await res.json();
-  return data?.ok ? data.product : null;
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const p = await getProduct(params.id);
 
-  if (!p) return { title: "Product not found" };
+  if (!p) {
+    return {
+      title: "Product not found",
+      description: "Product not found",
+    };
+  }
 
   const title = p.title;
   const desc = String(p.description || "").slice(0, 160);
@@ -46,7 +59,11 @@ export default async function Page({ params }: { params: { id: string } }) {
   const product = await getProduct(params.id);
 
   if (!product) {
-    return <div className="container">Product not found</div>;
+    return (
+      <div className="container" style={{ padding: 20 }}>
+        Product not found
+      </div>
+    );
   }
 
   return <ProductDetails id={params.id} product={product} />;
