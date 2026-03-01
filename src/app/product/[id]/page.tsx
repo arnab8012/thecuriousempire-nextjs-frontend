@@ -5,77 +5,64 @@ import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
 
-type Product = {
-  _id: string;
-  title?: string;
-  description?: string;
-  images?: string[];
-  price?: number;
-  compareAtPrice?: number;
-  category?: { name?: string };
-  isActive?: boolean;
-};
-
-async function getProduct(id: string): Promise<Product | null> {
+async function getProduct(id: string) {
   try {
-    const base = process.env.API_BASE;
+    const base = (process.env.API_BASE || "").replace(/\/$/, "");
     if (!base) return null;
 
     const res = await fetch(`${base}/api/products/${id}`, {
-      next: { revalidate },
+      next: { revalidate: 60 },
     });
 
-    if (!res.ok) return null;
+    const text = await res.text();
+    if (!res.ok || !text) return null;
 
-    const data = await res.json();
-    return data?.ok ? (data.product as Product) : null;
+    let data: any = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return null; // API থেকে JSON না এলে ক্র্যাশ না করে null
+    }
+
+    return data?.ok ? data.product : null;
   } catch {
     return null;
   }
-}
-
-function cleanText(s: string) {
-  return String(s || "").replace(/\s+/g, " ").trim();
-}
-
-function stripBrandSuffix(title: string) {
-  return cleanText(title).replace(/\s*\|\s*The Curious Empire\s*$/i, "");
 }
 
 export async function generateMetadata(
   { params }: { params: { id: string } }
 ): Promise<Metadata> {
   const p = await getProduct(params.id);
+
   const url = `https://thecuriousempire.com/product/${params.id}`;
 
   if (!p) {
     return {
-      title: "Product not found", // ✅ template auto add করবে
+      title: "Product not found | The Curious Empire",
       description: "This product is not available.",
       alternates: { canonical: url },
+      robots: { index: false, follow: true },
     };
   }
 
-  // ✅ এখানে ব্র্যান্ড suffix দিচ্ছি না (RootLayout template দিয়ে দিবে)
-  const title = stripBrandSuffix(p.title || "Product");
-  const desc = cleanText(p.description || "").slice(0, 160);
+  const title = `${p.title} | The Curious Empire`;
+  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
   const image =
     Array.isArray(p.images) && p.images[0] ? p.images[0] : "/logo.png";
 
   return {
-    title, // ✅ Only "Product Title"
+    title,
     description: desc,
     alternates: { canonical: url },
-
     openGraph: {
       title,
       description: desc,
       url,
       siteName: "The Curious Empire",
       images: [{ url: image }],
-      type: "product", // ✅ better than "website" for product pages
+      type: "website",
     },
-
     twitter: {
       card: "summary_large_image",
       title,
@@ -96,36 +83,5 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
-  const url = `https://thecuriousempire.com/product/${params.id}`;
-  const mainImage =
-    Array.isArray(product.images) && product.images[0] ? product.images[0] : undefined;
-
-  // ✅ SEO: Product JSON-LD (Rich Results)
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: cleanText(product.title || "Product"),
-    image: Array.isArray(product.images) ? product.images : mainImage ? [mainImage] : [],
-    description: cleanText(product.description || ""),
-    brand: { "@type": "Brand", name: "The Curious Empire" },
-    category: cleanText(product.category?.name || ""),
-    offers: {
-      "@type": "Offer",
-      url,
-      priceCurrency: "BDT",
-      price: product.price != null ? String(product.price) : "",
-      availability: "https://schema.org/InStock",
-      itemCondition: "https://schema.org/NewCondition",
-    },
-  };
-
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      <ProductDetails id={params.id} product={product} />
-    </>
-  );
+  return <ProductDetails id={params.id} product={product} />;
 }
