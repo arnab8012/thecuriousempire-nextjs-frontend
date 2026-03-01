@@ -6,15 +6,15 @@ import AdminRoute from "../../components/AdminRoute";
 import Link from "@/components/Link";
 
 function Inner() {
-  const fileRef = useRef(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const [cats, setCats] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [cats, setCats] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // ✅ id থাকলে edit mode
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<any>({
     id: "",
     title: "",
     category: "",
@@ -29,7 +29,7 @@ function Inner() {
     const c = await api.get("/api/categories");
     if (c?.ok) {
       setCats(c.categories || []);
-      setForm((f) => ({
+      setForm((f: any) => ({
         ...f,
         category: f.category || (c.categories?.[0]?._id || ""),
       }));
@@ -60,7 +60,7 @@ function Inner() {
   };
 
   // ✅ Upload images to backend -> cloudinary -> returns { ok, images:[url...] }
-  const uploadImages = async (fileList) => {
+  const uploadImages = async (fileList: FileList | null) => {
     const files = Array.from(fileList || []);
     if (!files.length) return;
 
@@ -79,15 +79,20 @@ function Inner() {
 
     try {
       const t = api.adminToken();
+      if (!t) {
+        alert("No token");
+        return;
+      }
+
       const res = await fetch(`${api.BASE}/api/admin/upload/product-images`, {
         method: "POST",
         headers: { Authorization: `Bearer ${t}` },
         body: fd,
       });
 
-      // ✅ Render/Server কখনও non-json দিতে পারে, তাই safe parse
+      // ✅ safe parse (non-json safe)
       const text = await res.text();
-      let data = {};
+      let data: any = {};
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
@@ -101,11 +106,11 @@ function Inner() {
 
       const newUrls = Array.isArray(data.images) ? data.images : [];
 
-      setForm((f) => ({
+      setForm((f: any) => ({
         ...f,
         images: [...(f.images || []), ...newUrls].slice(0, 5),
       }));
-    } catch (e) {
+    } catch (e: any) {
       alert(e?.message ? `Upload error: ${e.message}` : "Upload error");
     } finally {
       setUploading(false);
@@ -113,20 +118,20 @@ function Inner() {
     }
   };
 
-  const removeImage = (idx) => {
-    setForm((f) => ({
+  const removeImage = (idx: number) => {
+    setForm((f: any) => ({
       ...f,
-      images: (f.images || []).filter((_, i) => i !== idx),
+      images: (f.images || []).filter((_: any, i: number) => i !== idx),
     }));
   };
 
   const clearAllImages = () => {
-    setForm((f) => ({ ...f, images: [] }));
+    setForm((f: any) => ({ ...f, images: [] }));
     if (fileRef.current) fileRef.current.value = "";
   };
 
   const resetForm = () => {
-    setForm((f) => ({
+    setForm((f: any) => ({
       ...f,
       id: "",
       title: "",
@@ -145,7 +150,6 @@ function Inner() {
     if (!String(form.title || "").trim()) return alert("Title required");
     if (!form.category) return alert("Category required");
 
-    // ✅ Price allow 0? তুমি চাইলে 0 allow করা যায়
     if (Number(form.price) <= 0) return alert("Price required");
     if (!form.images?.length) return alert("Please upload at least 1 image");
 
@@ -162,16 +166,19 @@ function Inner() {
       };
 
       const t = api.adminToken();
+      if (!t) {
+        alert("No token");
+        return;
+      }
 
       // ✅ Edit mode
       if (form.id) {
-        // ⚠️ তোমার api.js এ putAuth নেই, তাই api.put ব্যবহার
-        const r = await api.put(`/api/admin/products/${form.id}`, payload, t);
+        const r = await api.putAuth(`/api/admin/products/${form.id}`, t, payload);
         if (!r?.ok) return alert(r?.message || "Update failed");
         alert("✅ Product updated");
       } else {
         // ✅ Add mode
-        const r = await api.post("/api/admin/products", payload, t);
+        const r = await api.postAuth("/api/admin/products", t, payload);
         if (!r?.ok) return alert(r?.message || "Add failed");
         alert("✅ Product added");
       }
@@ -183,7 +190,7 @@ function Inner() {
     }
   };
 
-  const onEdit = (p) => {
+  const onEdit = (p: any) => {
     setForm({
       id: p._id,
       title: p.title || "",
@@ -194,7 +201,7 @@ function Inner() {
       description: p.description || "",
       variants:
         Array.isArray(p.variants) && p.variants.length
-          ? p.variants.map((v) => `${v.name}:${v.stock}`).join(",")
+          ? p.variants.map((v: any) => `${v.name}:${v.stock}`).join(",")
           : "Pink & Blue:4",
     });
 
@@ -202,12 +209,14 @@ function Inner() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const onDelete = async (id) => {
+  const onDelete = async (id: string) => {
     const ok = window.confirm("Delete this product?");
     if (!ok) return;
 
     const t = api.adminToken();
-    const r = await api.delete(`/api/admin/products/${id}`, t);
+    if (!t) return alert("No token");
+
+    const r = await api.deleteAuth(`/api/admin/products/${id}`, t);
     if (!r?.ok) return alert(r?.message || "Delete failed");
 
     alert("✅ Deleted");
@@ -245,16 +254,16 @@ function Inner() {
         <input
           className="input"
           value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          onChange={(e) => setForm({ ...form, title: (e.target as HTMLInputElement).value })}
         />
 
         <label className="lbl">Category</label>
         <select
           className="input"
           value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          onChange={(e) => setForm({ ...form, category: (e.target as HTMLSelectElement).value })}
         >
-          {cats.map((c) => (
+          {cats.map((c: any) => (
             <option key={c._id} value={c._id}>
               {c.name}
             </option>
@@ -269,7 +278,7 @@ function Inner() {
               type="number"
               inputMode="numeric"
               value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
+              onChange={(e) => setForm({ ...form, price: (e.target as HTMLInputElement).value })}
             />
           </div>
           <div>
@@ -280,7 +289,7 @@ function Inner() {
               inputMode="numeric"
               value={form.compareAtPrice}
               onChange={(e) =>
-                setForm({ ...form, compareAtPrice: e.target.value })
+                setForm({ ...form, compareAtPrice: (e.target as HTMLInputElement).value })
               }
             />
           </div>
@@ -296,22 +305,15 @@ function Inner() {
           multiple
           accept="image/*"
           disabled={uploading}
-          onChange={(e) => uploadImages(e.target.files)}
+          onChange={(e) => uploadImages((e.target as HTMLInputElement).files)}
         />
 
         {uploading ? <div className="muted">Uploading images...</div> : null}
 
         {form.images?.length ? (
           <>
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                marginTop: 10,
-              }}
-            >
-              {form.images.map((img, i) => (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+              {form.images.map((img: string, i: number) => (
                 <div key={i} style={{ position: "relative" }}>
                   <img
                     src={img}
@@ -362,13 +364,11 @@ function Inner() {
           </div>
         )}
 
-        <label className="lbl">
-          Variants (format: Name:Stock,Name2:Stock2)
-        </label>
+        <label className="lbl">Variants (format: Name:Stock,Name2:Stock2)</label>
         <input
           className="input"
           value={form.variants}
-          onChange={(e) => setForm({ ...form, variants: e.target.value })}
+          onChange={(e) => setForm({ ...form, variants: (e.target as HTMLInputElement).value })}
         />
 
         <label className="lbl">Description</label>
@@ -376,33 +376,26 @@ function Inner() {
           className="input"
           rows={3}
           value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          onChange={(e) => setForm({ ...form, description: (e.target as HTMLTextAreaElement).value })}
         />
 
-        <button
-          className="btnPinkFull"
-          onClick={saveProduct}
-          disabled={uploading || saving}
-        >
+        <button className="btnPinkFull" onClick={saveProduct} disabled={uploading || saving}>
           {uploading
             ? "Uploading..."
             : saving
-            ? "Saving..."
-            : form.id
-            ? "Update Product"
-            : "Add Product"}
+              ? "Saving..."
+              : form.id
+                ? "Update Product"
+                : "Add Product"}
         </button>
       </div>
 
       <div className="grid">
-        {products.map((p) => (
+        {products.map((p: any) => (
           <div className="card" key={p._id}>
             <img
               className="cardImg"
-              src={
-                p.images?.[0] ||
-                "https://via.placeholder.com/400x300?text=Product"
-              }
+              src={p.images?.[0] || "https://via.placeholder.com/400x300?text=Product"}
               alt=""
             />
             <div className="cardBody">
@@ -414,18 +407,10 @@ function Inner() {
 
               {/* ✅ Edit/Delete actions */}
               <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                <button
-                  className="btnGhost"
-                  type="button"
-                  onClick={() => onEdit(p)}
-                >
+                <button className="btnGhost" type="button" onClick={() => onEdit(p)}>
                   Edit
                 </button>
-                <button
-                  className="btnDark"
-                  type="button"
-                  onClick={() => onDelete(p._id)}
-                >
+                <button className="btnDark" type="button" onClick={() => onDelete(p._id)}>
                   Delete
                 </button>
               </div>
