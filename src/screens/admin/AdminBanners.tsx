@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/api";
 import AdminRoute from "../../components/AdminRoute";
 import Link from "@/components/Link";
 
 function Inner() {
-  const fileRef = useRef(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [banners, setBanners] = useState([]); // DB
-  const [pending, setPending] = useState([]); // uploaded not saved [{url, public_id}]
+  const [banners, setBanners] = useState<any[]>([]); // DB
+  const [pending, setPending] = useState<any[]>([]); // uploaded not saved [{url, public_id}]
 
   // ✅ link input
   const [linkUrl, setLinkUrl] = useState("");
 
   // ✅ helper: relative url হলে BASE যোগ করবে (যাতে admin panel এও ছবি ঠিক আসে)
   const absUrl = useMemo(() => {
-    return (u) => {
+    return (u: any) => {
       if (!u) return "";
       const s = String(u);
       if (s.startsWith("http://") || s.startsWith("https://")) return s;
@@ -33,6 +33,8 @@ function Inner() {
     try {
       const r = await api.get("/api/banners");
       setBanners(r?.ok ? r.banners || [] : []);
+    } catch {
+      setBanners([]);
     } finally {
       setLoading(false);
     }
@@ -43,9 +45,15 @@ function Inner() {
   }, []);
 
   // ✅ upload images to cloudinary
-  const uploadBannerImages = async (files) => {
+  const uploadBannerImages = async (files: FileList | null) => {
     const arr = Array.from(files || []);
     if (!arr.length) return;
+
+    const t = api.adminToken();
+    if (!t) {
+      alert("No token");
+      return;
+    }
 
     const sliced = arr.slice(0, 10);
     setUploading(true);
@@ -54,7 +62,6 @@ function Inner() {
     for (const f of sliced) fd.append("images", f);
 
     try {
-      const t = api.adminToken();
       const res = await fetch(`${api.BASE}/api/admin/upload/banner-images`, {
         method: "POST",
         headers: { Authorization: `Bearer ${t}` },
@@ -70,7 +77,8 @@ function Inner() {
 
       const uploaded = Array.isArray(data.banners) ? data.banners : [];
       // ✅ ensure url absolute
-      const fixed = uploaded.map((x) => ({ ...x, url: absUrl(x?.url) }));
+      const fixed = uploaded.map((x: any) => ({ ...x, url: absUrl(x?.url) }));
+
       setPending((p) => [...p, ...fixed].slice(0, 10));
     } catch {
       alert("Upload error");
@@ -90,7 +98,7 @@ function Inner() {
     setLinkUrl("");
   };
 
-  const removePending = (idx) => {
+  const removePending = (idx: number) => {
     setPending((p) => p.filter((_, i) => i !== idx));
   };
 
@@ -98,10 +106,13 @@ function Inner() {
   const savePendingToDB = async () => {
     if (!pending.length) return alert("No banners to save");
 
+    const t = api.adminToken();
+    if (!t) return alert("No token");
+
     setSaving(true);
     try {
-      const t = api.adminToken();
-      const r = await api.post("/api/admin/banners", { banners: pending }, t);
+      // ✅ FIX: admin token সহ call দিতে হবে (api.post() টোকেন নেয় না)
+      const r = await api.postAuth("/api/admin/banners", t, { banners: pending });
 
       if (!r?.ok) {
         alert(r?.message || "Save failed");
@@ -111,23 +122,32 @@ function Inner() {
       setPending([]);
       await load();
       alert("✅ Banners saved");
+    } catch {
+      alert("Save error");
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteBanner = async (id) => {
+  const deleteBanner = async (id: string) => {
     if (!confirm("Delete this banner?")) return;
 
     const t = api.adminToken();
-    const res = await fetch(`${api.BASE}/api/admin/banners/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${t}` },
-    });
-    const data = await res.json();
+    if (!t) return alert("No token");
 
-    if (!data?.ok) return alert(data?.message || "Delete failed");
-    load();
+    try {
+      const res = await fetch(`${api.BASE}/api/admin/banners/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${t}` },
+      });
+
+      const data = await res.json();
+      if (!data?.ok) return alert(data?.message || "Delete failed");
+
+      load();
+    } catch {
+      alert("Delete failed");
+    }
   };
 
   return (
@@ -180,7 +200,7 @@ function Inner() {
           <>
             <div className="bannerThumbGrid">
               {pending.map((b, i) => (
-                <div key={b.public_id + i} className="bannerThumb">
+                <div key={(b.public_id || "x") + i} className="bannerThumb">
                   <img src={absUrl(b.url)} alt="" />
                   <button
                     type="button"
