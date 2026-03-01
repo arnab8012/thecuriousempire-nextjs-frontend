@@ -12,7 +12,6 @@ async function request(path: string, options: RequestInit = {}) {
 
   const url = `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
-  // ✅ FIX: ...options আগে, headers পরে => Content-Type কখনো হারাবে না
   const res = await fetch(url, {
     ...options,
     credentials: "include",
@@ -39,9 +38,24 @@ function safeToken() {
   }
 }
 
+// ✅ ADD: admin token helper
+function safeAdminToken() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem("admin_token") || "";
+  } catch {
+    return "";
+  }
+}
+
 export const api = {
   BASE,
+
+  // ✅ user token
   token: safeToken,
+
+  // ✅ admin token
+  adminToken: safeAdminToken,
 
   get: (path: string) => request(path, { method: "GET" }),
 
@@ -53,6 +67,7 @@ export const api = {
 
   delete: (path: string) => request(path, { method: "DELETE" }),
 
+  // 🔐 With token (Authorization header)
   getAuth: (path: string, token: string) =>
     request(path, { method: "GET", headers: { Authorization: `Bearer ${token}` } }),
 
