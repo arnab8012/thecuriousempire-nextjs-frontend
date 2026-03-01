@@ -6,28 +6,19 @@ import ProductDetails from "@/screens/ProductDetails";
 export const revalidate = 60;
 
 async function getProduct(id: string) {
-  try {
-    const base = (process.env.API_BASE || "").replace(/\/$/, "");
-    if (!base) return null;
+  const base =
+    process.env.API_BASE ||
+    process.env.NEXT_PUBLIC_API_BASE || // fallback (যদি API_BASE না থাকে)
+    "https://api.thecuriousempire.com";
 
-    const res = await fetch(`${base}/api/products/${id}`, {
-      next: { revalidate: 60 },
-    });
+  const res = await fetch(`${base}/api/products/${id}`, {
+    next: { revalidate: 60 },
+  });
 
-    const text = await res.text();
-    if (!res.ok || !text) return null;
+  if (!res.ok) return null;
 
-    let data: any = null;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return null; // API থেকে JSON না এলে ক্র্যাশ না করে null
-    }
-
-    return data?.ok ? data.product : null;
-  } catch {
-    return null;
-  }
+  const data = await res.json();
+  return data?.ok ? data.product : null;
 }
 
 export async function generateMetadata(
@@ -39,20 +30,22 @@ export async function generateMetadata(
 
   if (!p) {
     return {
-      title: "Product not found | The Curious Empire",
+      title: "Product not found", // ✅ এখানে আর suffix দিও না (RootLayout template দিবে)
       description: "This product is not available.",
       alternates: { canonical: url },
-      robots: { index: false, follow: true },
     };
   }
 
-  const title = `${p.title} | The Curious Empire`;
-  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
+  const title = String(p.title || "Product");
+  const desc = String(p.description || "")
+    .replace(/\s+/g, " ")
+    .slice(0, 160);
+
   const image =
-    Array.isArray(p.images) && p.images[0] ? p.images[0] : "/logo.png";
+    (Array.isArray(p.images) && p.images[0]) ? p.images[0] : "/logo.png";
 
   return {
-    title,
+    title, // ✅ শুধু title, template auto suffix দিবে
     description: desc,
     alternates: { canonical: url },
     openGraph: {
@@ -61,7 +54,7 @@ export async function generateMetadata(
       url,
       siteName: "The Curious Empire",
       images: [{ url: image }],
-      type: "website",
+      type: "product", // ✅ product better
     },
     twitter: {
       card: "summary_large_image",
