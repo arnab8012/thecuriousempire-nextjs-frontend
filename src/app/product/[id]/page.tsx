@@ -1,39 +1,24 @@
 // src/app/product/[id]/page.tsx
-
 import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
 
 async function getProduct(id: string) {
   try {
-    const base = process.env.API_BASE;
+    const base = process.env.API_BASE; // ✅ server env (Vercel: API_BASE)
 
     if (!base) return null;
 
     const res = await fetch(`${base}/api/products/${id}`, {
-      cache: "no-store",
+      // ✅ SEO + performance: ISR cache (revalidate উপরে আছে)
+      next: { revalidate },
     });
 
-    const text = await res.text();
+    if (!res.ok) return null;
 
-    if (!res.ok) {
-      console.error("Fetch status error:", res.status);
-      return null;
-    }
-
-    if (!text) return null;
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.error("Invalid JSON from API");
-      return null;
-    }
-
+    const data = await res.json().catch(() => null);
     return data?.ok ? data.product : null;
-  } catch (err) {
-    console.error("Server fetch error:", err);
+  } catch {
     return null;
   }
 }
@@ -45,12 +30,35 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
     return {
       title: "Product not found",
       description: "Product not found",
+      robots: { index: false, follow: false },
     };
   }
 
+  const title = String(p.title || "Product");
+  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
+  const img = p?.images?.[0] || "/logo.png";
+  const url = `https://thecuriousempire.com/product/${p?._id || params.id}`;
+
   return {
-    title: p.title,
-    description: String(p.description || "").slice(0, 160),
+    title,
+    description: desc,
+    alternates: { canonical: url },
+
+    openGraph: {
+      title,
+      description: desc,
+      url,
+      siteName: "The Curious Empire",
+      images: img ? [{ url: img }] : [],
+      type: "product",
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: desc,
+      images: img ? [img] : [],
+    },
   };
 }
 
