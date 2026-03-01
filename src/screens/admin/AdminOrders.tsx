@@ -8,14 +8,21 @@ import Link from "@/components/Link";
 const STATUSES = ["PLACED", "CONFIRMED", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
 
 function Inner() {
-  const t = api.adminToken();
+  // ✅ FIX-1: adminToken() নাই -> token() ব্যবহার করো
+  const t = api.token(); // localStorage token
 
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     try {
       setLoading(true);
+
+      // ✅ token না থাকলে (AdminRoute সাধারণত redirect করবে)
+      if (!t) {
+        setOrders([]);
+        return;
+      }
 
       const rr = await api.getAuth("/api/admin/orders", t);
 
@@ -26,6 +33,9 @@ function Inner() {
       }
 
       setOrders(Array.isArray(rr.orders) ? rr.orders : []);
+    } catch (e: any) {
+      alert(e?.message || "Orders load failed");
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -36,13 +46,17 @@ function Inner() {
     // eslint-disable-next-line
   }, []);
 
-  const setStatus = async (id, status) => {
-    const rr = await api.put(`/api/admin/orders/${id}/status`, { status }, t);
+  const setStatus = async (id: string, status: string) => {
+    if (!t) return alert("No token");
+
+    // ✅ FIX-2: api.put() token নেয় না -> putAuth ব্যবহার করো
+    const rr = await api.putAuth(`/api/admin/orders/${id}/status`, t, { status });
+
     if (!rr?.ok) return alert(rr?.message || "Failed to update status");
     load();
   };
 
-  const statusLabel = (s) => {
+  const statusLabel = (s: any) => {
     const v = String(s || "PLACED");
     return v.replaceAll("_", " ");
   };
@@ -61,12 +75,12 @@ function Inner() {
       ) : orders.length === 0 ? (
         <div className="box adminOrderCard">No orders found</div>
       ) : (
-        orders.map((o) => {
+        orders.map((o: any) => {
           const shipping = o.shipping || {};
           const items = Array.isArray(o.items) ? o.items : [];
 
           return (
-            <div className="box adminOrderCard" key={o._id}>
+            <div className="box adminOrderCard" key={o._id || o.orderNo}>
               {/* top */}
               <div className="adminOrderTop">
                 <div className="adminOrderTopLeft">
@@ -78,7 +92,7 @@ function Inner() {
                     </span>
                   </div>
 
-                  {/* ✅ FULL SHIPPING DETAILS (সব দেখাবে) */}
+                  {/* ✅ FULL SHIPPING DETAILS */}
                   <div className="adminOrderMeta">
                     <div className="shipName">{shipping.fullName || "No name"}</div>
 
@@ -112,7 +126,7 @@ function Inner() {
                     No items
                   </div>
                 ) : (
-                  items.map((it, i) => {
+                  items.map((it: any, i: number) => {
                     const qty = Number(it?.qty || 0);
                     const price = Number(it?.price || 0);
                     const lineTotal = price * qty;
@@ -142,7 +156,7 @@ function Inner() {
                   <select
                     className="adminStatusSelect"
                     value={o.status || "PLACED"}
-                    onChange={(e) => setStatus(o._id, e.target.value)}
+                    onChange={(e) => setStatus(o._id, (e.target as HTMLSelectElement).value)}
                   >
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>
