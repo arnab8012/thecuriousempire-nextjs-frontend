@@ -1,32 +1,29 @@
 // src/app/product/[id]/page.tsx
+
 import type { Metadata } from "next";
 import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
 
-function getBase() {
-  // ✅ hidden whitespace / zero-width char avoid
-  return (process.env.API_BASE || "").trim().replace(/\/+$/, "");
-}
-
 async function getProduct(id: string) {
-  const base = getBase();
+  const base = process.env.API_BASE;
   if (!base) return null;
 
-  try {
-    const res = await fetch(`${base}/api/products/${id}`, {
-      // ✅ Next cache control
-      next: { revalidate: 60 },
-    });
+  const res = await fetch(`${base}/api/products/${id}`, {
+    // ✅ Next recommended caching for revalidate pages
+    next: { revalidate },
+  });
 
-    if (!res.ok) return null;
+  if (!res.ok) return null;
 
-    const data = await res.json();
-    return data?.ok ? data.product : null;
-  } catch {
-    // ✅ never crash server render
-    return null;
-  }
+  const data = await res.json();
+  return data?.ok ? data.product : null;
+}
+
+// ✅ Emoji-safe truncate (codepoint-wise, slice breaks emoji sometimes)
+function safeTruncate(input: unknown, max = 160) {
+  const s = String(input ?? "").replace(/\s+/g, " ").trim();
+  return Array.from(s).slice(0, max).join("");
 }
 
 export async function generateMetadata(
@@ -38,16 +35,21 @@ export async function generateMetadata(
 
   if (!p) {
     return {
-      title: "Product not found | The Curious Empire",
+      title: "Product not found",
       description: "This product is not available.",
       alternates: { canonical: url },
     };
   }
 
-  const title = `${p.title} | The Curious Empire`;
-  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
+  // ✅ RootLayout already adds "| The Curious Empire" via template
+  const title = String(p.title || "Product");
+  const desc = safeTruncate(p.description, 160);
+
+  // ✅ absolute image (best for OG/Twitter)
   const image =
-    Array.isArray(p.images) && p.images[0] ? p.images[0] : "https://thecuriousempire.com/logo.png";
+    Array.isArray(p.images) && p.images[0]
+      ? String(p.images[0])
+      : "https://thecuriousempire.com/logo.png";
 
   return {
     title,
