@@ -4,14 +4,10 @@ import ProductDetails from "@/screens/ProductDetails";
 export const revalidate = 60;
 
 async function getProduct(id: string) {
-  const base = process.env.NEXT_PUBLIC_API_BASE || "https://api.thecuriousempire.com";
+  const base = process.env.API_BASE || "https://api.thecuriousempire.com";
+  const res = await fetch(`${base}/api/products/${id}`, { cache: "no-store" });
 
-  const res = await fetch(`${base}/api/products/${id}`, {
-    // ✅ revalidate কাজ করার জন্য এইটা দরকার
-    next: { revalidate: 60 },
-  });
-
-  // backend error handle
+  // যদি 404/500 হয়, crash না করে null return
   if (!res.ok) return null;
 
   const data = await res.json();
@@ -23,9 +19,9 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
 
   if (!p) return { title: "Product not found" };
 
-  const title = String(p.title || "Product");
-  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
-  const img = p.images?.[0] ? String(p.images[0]) : "";
+  const title = p.title;
+  const desc = String(p.description || "").slice(0, 160);
+  const img = p.images?.[0];
 
   return {
     title,
@@ -52,6 +48,5 @@ export default async function Page({ params }: { params: { id: string } }) {
     return <div className="container">Product not found</div>;
   }
 
-  // ✅ server fetched product পাঠাচ্ছি
   return <ProductDetails id={params.id} product={product} />;
 }
