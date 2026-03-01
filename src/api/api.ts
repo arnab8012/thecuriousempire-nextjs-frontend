@@ -12,13 +12,23 @@ async function request(path: string, options: RequestInit = {}) {
 
   const url = `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
+  // ✅ Content-Type only for JSON (FormData হলে দিবে না)
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+
+  const headers: Record<string, string> = {
+    ...(options.headers as any),
+  };
+
+  // যদি caller header দেয় নাই, এবং body FormData না, তখন JSON header বসাবে
+  if (!isFormData && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(url, {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
   });
 
   const text = await res.text();
@@ -29,20 +39,10 @@ async function request(path: string, options: RequestInit = {}) {
   }
 }
 
-function safeToken() {
+function safeGetLS(key: string) {
   if (typeof window === "undefined") return "";
   try {
-    return window.localStorage.getItem("token") || "";
-  } catch {
-    return "";
-  }
-}
-
-// ✅ ADD: admin token helper
-function safeAdminToken() {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.localStorage.getItem("admin_token") || "";
+    return window.localStorage.getItem(key) || "";
   } catch {
     return "";
   }
@@ -52,24 +52,34 @@ export const api = {
   BASE,
 
   // ✅ user token
-  token: safeToken,
+  token: () => safeGetLS("token"),
 
   // ✅ admin token
-  adminToken: safeAdminToken,
+  adminToken: () => safeGetLS("admin_token"),
 
+  // ---------- public ----------
   get: (path: string) => request(path, { method: "GET" }),
 
   post: (path: string, body?: any) =>
-    request(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+    request(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 
   put: (path: string, body?: any) =>
-    request(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+    request(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 
   delete: (path: string) => request(path, { method: "DELETE" }),
 
-  // 🔐 With token (Authorization header)
+  // ---------- USER auth ----------
   getAuth: (path: string, token: string) =>
-    request(path, { method: "GET", headers: { Authorization: `Bearer ${token}` } }),
+    request(path, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 
   postAuth: (path: string, token: string, body?: any) =>
     request(path, {
@@ -86,5 +96,51 @@ export const api = {
     }),
 
   deleteAuth: (path: string, token: string) =>
-    request(path, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }),
+    request(path, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  // ---------- ADMIN auth ----------
+  getAdmin: (path: string, adminToken: string) =>
+    request(path, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${adminToken}` },
+    }),
+
+  postAdmin: (path: string, adminToken: string, body?: any) =>
+    request(path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+
+  putAdmin: (path: string, adminToken: string, body?: any) =>
+    request(path, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+
+  deleteAdmin: (path: string, adminToken: string) =>
+    request(path, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${adminToken}` },
+    }),
+
+  // ✅ FormData upload (ADMIN)
+  postFormAdmin: (path: string, adminToken: string, form: FormData) =>
+    request(path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: form, // ✅ Content-Type auto হবে
+    }),
+
+  // ✅ FormData upload (USER) - দরকার হলে
+  postFormAuth: (path: string, token: string, form: FormData) =>
+    request(path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    }),
 };
