@@ -1,19 +1,21 @@
-// src/app/product/[id]/page.tsx
 import ProductDetails from "@/screens/ProductDetails";
 
 export const revalidate = 60;
 
 async function getProduct(id: string) {
-  const base =
-    process.env.API_BASE ||
-    process.env.NEXT_PUBLIC_API_BASE ||
-    "https://api.thecuriousempire.com";
+  const base = process.env.API_BASE; // ✅ শুধু এটা ব্যবহার করো
+
+  if (!base) {
+    throw new Error("API_BASE missing");
+  }
 
   const res = await fetch(`${base}/api/products/${id}`, {
-    next: { revalidate: 60 },
+    cache: "no-store",
   });
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    return null;
+  }
 
   const data = await res.json();
   return data?.ok ? data.product : null;
@@ -22,9 +24,7 @@ async function getProduct(id: string) {
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const p = await getProduct(params.id);
 
-  if (!p) {
-    return { title: "Product not found" };
-  }
+  if (!p) return { title: "Product not found" };
 
   const title = p.title;
   const desc = String(p.description || "").slice(0, 160);
@@ -38,12 +38,6 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
       description: desc,
       images: img ? [{ url: img }] : [],
       type: "product",
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description: desc,
-      images: img ? [img] : [],
     },
   };
 }
