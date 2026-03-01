@@ -4,29 +4,38 @@ import ProductDetails from "@/screens/ProductDetails";
 export const revalidate = 60;
 
 async function getProduct(id: string) {
+  const base = process.env.API_BASE;
+
+  if (!base) {
+    console.error("API_BASE missing");
+    return null;
+  }
+
   try {
-    const base = process.env.API_BASE; // ✅ server env (Vercel: API_BASE)
-
-    if (!base) return null;
-
     const res = await fetch(`${base}/api/products/${id}`, {
-      // ✅ SEO + performance: ISR cache (revalidate উপরে আছে)
-      next: { revalidate },
+      next: { revalidate: 60 },
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error("API response not OK:", res.status);
+      return null;
+    }
 
-    const data = await res.json().catch(() => null);
-    return data?.ok ? data.product : null;
-  } catch {
+    const data = await res.json();
+
+    if (!data?.ok) return null;
+
+    return data.product;
+  } catch (err) {
+    console.error("Fetch error:", err);
     return null;
   }
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
-  const p = await getProduct(params.id);
+  const product = await getProduct(params.id);
 
-  if (!p) {
+  if (!product) {
     return {
       title: "Product not found",
       description: "Product not found",
@@ -34,30 +43,32 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
     };
   }
 
-  const title = String(p.title || "Product");
-  const desc = String(p.description || "").replace(/\s+/g, " ").slice(0, 160);
-  const img = p?.images?.[0] || "/logo.png";
-  const url = `https://thecuriousempire.com/product/${p?._id || params.id}`;
+  const title = product.title;
+  const description = String(product.description || "")
+    .replace(/\n/g, " ")
+    .slice(0, 160);
+
+  const image = product.images?.[0] || "/logo.png";
+  const url = `https://thecuriousempire.com/product/${params.id}`;
 
   return {
     title,
-    description: desc,
+    description,
     alternates: { canonical: url },
 
     openGraph: {
       title,
-      description: desc,
+      description,
       url,
-      siteName: "The Curious Empire",
-      images: img ? [{ url: img }] : [],
+      images: [{ url: image }],
       type: "product",
     },
 
     twitter: {
       card: "summary_large_image",
       title,
-      description: desc,
-      images: img ? [img] : [],
+      description,
+      images: [image],
     },
   };
 }
