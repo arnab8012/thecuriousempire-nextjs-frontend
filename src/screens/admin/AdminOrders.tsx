@@ -8,9 +8,6 @@ import Link from "@/components/Link";
 const STATUSES = ["PLACED", "CONFIRMED", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
 
 function Inner() {
-  // ✅ FIX-1: adminToken() নাই -> token() ব্যবহার করো
-  const t = api.token(); // localStorage token
-
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,7 +15,9 @@ function Inner() {
     try {
       setLoading(true);
 
-      // ✅ token না থাকলে (AdminRoute সাধারণত redirect করবে)
+      // ✅ Admin token ALWAYS here (fresh read from localStorage)
+      const t = api.adminToken ? api.adminToken() : "";
+
       if (!t) {
         setOrders([]);
         return;
@@ -47,9 +46,10 @@ function Inner() {
   }, []);
 
   const setStatus = async (id: string, status: string) => {
-    if (!t) return alert("No token");
+    const t = api.adminToken ? api.adminToken() : "";
+    if (!t) return alert("No admin token");
 
-    // ✅ FIX-2: api.put() token নেয় না -> putAuth ব্যবহার করো
+    // ✅ must be putAuth (Authorization header)
     const rr = await api.putAuth(`/api/admin/orders/${id}/status`, t, { status });
 
     if (!rr?.ok) return alert(rr?.message || "Failed to update status");
