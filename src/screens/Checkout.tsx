@@ -19,11 +19,12 @@ const DIVISIONS = [
   "Mymensingh",
 ];
 
-const BOOK_KEY = "shipping_book_v1";
-
-// CartContext keys (তোমার CartContext এ দেওয়া)
+// ✅ CartContext keys (তোমার CartContext এ দেওয়া)
 const CART_KEY = "cart_items_v1";
 const BUY_KEY = "buy_now_item_v1";
+
+// ✅ Per-user address book key (same device multiple accounts fix)
+const getBookKey = (uid: string) => `shipping_book_v1:${uid || "guest"}`;
 
 type Shipping = {
   fullName: string;
@@ -82,38 +83,6 @@ function isShipMeaningful(s: any) {
   return !!(fullName && phone1 && district && upazila && addressLine);
 }
 
-function loadBookClean(): Book {
-  if (typeof window === "undefined") return { selectedId: "", items: [] };
-
-  try {
-    const raw = localStorage.getItem(BOOK_KEY) || "";
-    const b = raw ? JSON.parse(raw) : {};
-    const items: BookItem[] = Array.isArray(b?.items) ? b.items : [];
-
-    // ✅ remove blank addresses from book
-    const cleanedItems = items.filter((x) => isShipMeaningful(x?.shipping));
-
-    // ✅ if book had only blank -> wipe it
-    if (items.length > 0 && cleanedItems.length === 0) {
-      localStorage.removeItem(BOOK_KEY);
-      return { selectedId: "", items: [] };
-    }
-
-    const selectedId = String(b?.selectedId || "");
-    // ✅ if selectedId points to removed item -> fallback first
-    const selectedExists = cleanedItems.some((x) => x.id === selectedId);
-    const sid = selectedExists ? selectedId : cleanedItems[0]?.id || "";
-
-    // ✅ persist cleaned book back (so problem never returns)
-    const next = { selectedId: sid, items: cleanedItems };
-    localStorage.setItem(BOOK_KEY, JSON.stringify(next));
-
-    return next;
-  } catch {
-    return { selectedId: "", items: [] };
-  }
-}
-
 function safeJsonGet(key: string, fallback: any) {
   if (typeof window === "undefined") return fallback;
   try {
@@ -138,6 +107,42 @@ export default function Checkout() {
   const token = api.token();
   const deliveryCharge = 110;
 
+  // ✅ same device multiple accounts fix: per-user localStorage key
+  const userKey = String(user?._id || user?.id || user?.phone || "guest");
+  const BOOK_KEY = getBookKey(userKey);
+
+  function loadBookClean(): Book {
+    if (typeof window === "undefined") return { selectedId: "", items: [] };
+
+    try {
+      const raw = localStorage.getItem(BOOK_KEY) || "";
+      const b = raw ? JSON.parse(raw) : {};
+      const items: BookItem[] = Array.isArray(b?.items) ? b.items : [];
+
+      // ✅ remove blank addresses from book
+      const cleanedItems = items.filter((x) => isShipMeaningful(x?.shipping));
+
+      // ✅ if book had only blank -> wipe it
+      if (items.length > 0 && cleanedItems.length === 0) {
+        localStorage.removeItem(BOOK_KEY);
+        return { selectedId: "", items: [] };
+      }
+
+      const selectedId = String(b?.selectedId || "");
+      // ✅ if selectedId points to removed item -> fallback first
+      const selectedExists = cleanedItems.some((x) => x.id === selectedId);
+      const sid = selectedExists ? selectedId : cleanedItems[0]?.id || "";
+
+      // ✅ persist cleaned book back (so problem never returns)
+      const next = { selectedId: sid, items: cleanedItems };
+      localStorage.setItem(BOOK_KEY, JSON.stringify(next));
+
+      return next;
+    } catch {
+      return { selectedId: "", items: [] };
+    }
+  }
+
   // ✅ legacy single shippingAddress save (তোমার backend PUT /api/auth/me handle করে)
   const saveShippingToDB = async (ship: Shipping) => {
     if (!token) return { ok: false, message: "No token" };
@@ -146,7 +151,10 @@ export default function Checkout() {
 
   const [book, setBook] = useState<Book>(() => loadBookClean());
   const [useNew, setUseNew] = useState<boolean>(false);
-  const [selectedId, setSelectedId] = useState<string>(book.selectedId || "");
+  const [selectedId, setSelectedId] = useState<string>(() => {
+    const b = loadBookClean();
+    return b.selectedId || "";
+  });
   const [shipping, setShipping] = useState<Shipping>(() => emptyShipping(user));
 
   const [paymentMethod, setPaymentMethod] = useState<"COD" | "FULL_PAYMENT">("COD");
@@ -203,7 +211,7 @@ export default function Checkout() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?._id || user?.id]);
+  }, [userKey]);
 
   // ✅ when selecting saved item
   useEffect(() => {
@@ -562,11 +570,7 @@ export default function Checkout() {
           </label>
 
           <label className="radio">
-            <input
-              type="radio"
-              checked={paymentMethod === "COD"}
-              onChange={() => setPaymentMethod("COD")}
-            />
+            <input type="radio" checked={paymentMethod === "COD"} onChange={() => setPaymentMethod("COD")} />
             Cash On Delivery
           </label>
         </div>
