@@ -1,3 +1,4 @@
+// src/app/layout.tsx
 import "./globals.css";
 import Providers from "./providers";
 import LayoutShell from "@/components/LayoutShell";
@@ -18,31 +19,6 @@ export const metadata: Metadata = {
     "Ecommerce BD",
   ],
   metadataBase: new URL("https://thecuriousempire.com"),
-
-  openGraph: {
-    title: "The Curious Empire",
-    description:
-      "Premium Shopping Experience — Unique products delivered with quality & care.",
-    url: "https://thecuriousempire.com",
-    siteName: "The Curious Empire",
-    images: [
-      {
-        url: "/logo.png",
-        width: 1200,
-        height: 630,
-        alt: "The Curious Empire",
-      },
-    ],
-    type: "website",
-  },
-
-  twitter: {
-    card: "summary_large_image",
-    title: "The Curious Empire",
-    description:
-      "Premium Shopping Experience — Unique products delivered with quality & care.",
-    images: ["/logo.png"],
-  },
 };
 
 export default function RootLayout({
