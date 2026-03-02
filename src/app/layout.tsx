@@ -13,10 +13,9 @@ export const metadata: Metadata = {
     "Premium Shopping Experience — Unique products delivered with quality & care.",
   metadataBase: new URL("https://thecuriousempire.com"),
 
-  // ✅ (Optional but important) Google/favicon এর জন্য
   icons: {
     icon: "/favicon.ico",
-    apple: "/favicon-192.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 
@@ -25,7 +24,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // ✅ Organization JSON-LD (এখানে logo URL change করবে)
   const orgLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -36,13 +34,13 @@ export default function RootLayout({
 
   return (
     <html lang="en">
-      <body>
-        {/* ✅ Google / SEO এর জন্য Organization Structured Data */}
+      <head>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
         />
-
+      </head>
+      <body>
         <Providers>
           <Suspense fallback={null}>
             <LayoutShell>{children}</LayoutShell>
