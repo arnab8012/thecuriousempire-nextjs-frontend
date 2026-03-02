@@ -10,9 +10,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <CartProvider>
-        <FavoritesProvider>
-          {children}
-        </FavoritesProvider>
+        <FavoritesProvider>{children}</FavoritesProvider>
       </CartProvider>
     </AuthProvider>
   );
