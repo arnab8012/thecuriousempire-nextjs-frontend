@@ -25,7 +25,6 @@ type CartContextValue = {
   clearBuyNow: () => void;
 };
 
-// ✅ Context default undefined (safe)
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
 const CART_KEY = "cart_items_v1";
@@ -81,17 +80,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const add = (item: CartItem) => {
     setItems((prev) => {
       const i = prev.findIndex(
-        (x) =>
-          x.productId === item.productId &&
-          String(x.variant || "") === String(item.variant || "")
+        (x) => x.productId === item.productId && String(x.variant || "") === String(item.variant || "")
       );
 
       let next: CartItem[];
       if (i >= 0) {
         next = prev.map((x, idx) =>
-          idx === i
-            ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) }
-            : x
+          idx === i ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) } : x
         );
       } else {
         next = [...prev, { ...item, qty: Number(item.qty || 1) }];
@@ -105,9 +100,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const inc = (productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.map((x) => {
-        const same =
-          String(x.productId) === String(productId) &&
-          String(x.variant || "") === String(variant || "");
+        const same = String(x.productId) === String(productId) && String(x.variant || "") === String(variant || "");
         return same ? { ...x, qty: Number(x.qty || 0) + 1 } : x;
       });
       saveCart(next);
@@ -118,9 +111,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const dec = (productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.map((x) => {
-        const same =
-          String(x.productId) === String(productId) &&
-          String(x.variant || "") === String(variant || "");
+        const same = String(x.productId) === String(productId) && String(x.variant || "") === String(variant || "");
         return same ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) } : x;
       });
       saveCart(next);
@@ -131,11 +122,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const remove = (productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.filter(
-        (x) =>
-          !(
-            String(x.productId) === String(productId) &&
-            String(x.variant || "") === String(variant || "")
-          )
+        (x) => !(String(x.productId) === String(productId) && String(x.variant || "") === String(variant || ""))
       );
       saveCart(next);
       return next;
@@ -145,6 +132,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clear = () => {
     setItems([]);
     safeRemove(CART_KEY);
+    // ✅ FIX: buy_now cache ও clear
+    safeRemove(BUY_KEY);
+    setCheckoutItem(null);
   };
 
   const buyNow = (product: any, variant = "", qty = 1) => {
@@ -166,34 +156,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     safeRemove(BUY_KEY);
   };
 
-  const cartCount = useMemo(
-    () => items.reduce((s, x) => s + Number(x.qty || 0), 0),
-    [items]
-  );
+  const cartCount = useMemo(() => items.reduce((s, x) => s + Number(x.qty || 0), 0), [items]);
 
-  const value: CartContextValue = {
-    items,
-    add,
-    inc,
-    dec,
-    remove,
-    clear,
-    cartCount,
-    buyNow,
-    checkoutItem,
-    clearBuyNow,
-  };
+  const value: CartContextValue = { items, add, inc, dec, remove, clear, cartCount, buyNow, checkoutItem, clearBuyNow };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
-// ✅ IMPORTANT FIX: Provider না থাকলেও crash করবে না
 export function useCart(): CartContextValue {
   const ctx = useContext(CartContext);
 
   if (ctx) return ctx;
 
-  // fallback (NO CRASH)
   return {
     items: [],
     add: () => {},
