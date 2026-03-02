@@ -1,43 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 
-type CartItem = {
-  productId: string;
-  title?: string;
-  price?: number;
-  image?: string;
-  variant?: string;
-  qty?: number;
-};
-
-type CartContextValue = {
-  items: CartItem[];
-  add: (item: CartItem) => void;
-  inc: (productId: string, variant?: string) => void;
-  dec: (productId: string, variant?: string) => void;
-  remove: (productId: string, variant?: string) => void;
-  clear: () => void;
-  cartCount: number;
-
-  buyNow: (product: any, variant?: string, qty?: number) => void;
-  checkoutItem: CartItem | null;
-  clearBuyNow: () => void;
-};
-
-const noop = () => {};
-const CartContext = createContext<CartContextValue>({
-  items: [],
-  add: noop,
-  inc: noop,
-  dec: noop,
-  remove: noop,
-  clear: noop,
-  cartCount: 0,
-  buyNow: noop,
-  checkoutItem: null,
-  clearBuyNow: noop,
-});
+const CartContext = createContext<any>(null);
 
 const CART_KEY = "cart_items_v1";
 const BUY_KEY = "buy_now_item_v1";
@@ -63,7 +28,7 @@ function safeRemove(key: string) {
   } catch {}
 }
 
-function loadCart(): CartItem[] {
+function loadCart() {
   try {
     const raw = safeGet(CART_KEY) || "[]";
     const j = JSON.parse(raw);
@@ -73,14 +38,14 @@ function loadCart(): CartItem[] {
   }
 }
 
-function saveCart(items: CartItem[]) {
+function saveCart(items: any[]) {
   safeSet(CART_KEY, JSON.stringify(items));
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => loadCart());
+  const [items, setItems] = useState<any[]>(() => loadCart());
 
-  const [checkoutItem, setCheckoutItem] = useState<CartItem | null>(() => {
+  const [checkoutItem, setCheckoutItem] = useState<any>(() => {
     try {
       const raw = safeGet(BUY_KEY);
       return raw ? JSON.parse(raw) : null;
@@ -89,20 +54,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
-  const add = (item: CartItem) => {
+  const add = (item: any) => {
     setItems((prev) => {
       const i = prev.findIndex(
-        (x) =>
-          String(x.productId) === String(item.productId) &&
-          String(x.variant || "") === String(item.variant || "")
+        (x) => x.productId === item.productId && String(x.variant || "") === String(item.variant || "")
       );
 
-      let next: CartItem[];
+      let next: any[];
       if (i >= 0) {
         next = prev.map((x, idx) =>
-          idx === i
-            ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) }
-            : x
+          idx === i ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) } : x
         );
       } else {
         next = [...prev, { ...item, qty: Number(item.qty || 1) }];
@@ -113,12 +74,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const inc = (productId: string, variant = "") => {
+  const inc = (productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.map((x) => {
         const same =
-          String(x.productId) === String(productId) &&
-          String(x.variant || "") === String(variant || "");
+          String(x.productId) === String(productId) && String(x.variant || "") === String(variant || "");
         return same ? { ...x, qty: Number(x.qty || 0) + 1 } : x;
       });
       saveCart(next);
@@ -126,12 +86,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const dec = (productId: string, variant = "") => {
+  const dec = (productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.map((x) => {
         const same =
-          String(x.productId) === String(productId) &&
-          String(x.variant || "") === String(variant || "");
+          String(x.productId) === String(productId) && String(x.variant || "") === String(variant || "");
         return same ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) } : x;
       });
       saveCart(next);
@@ -139,14 +98,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const remove = (productId: string, variant = "") => {
+  const remove = (productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.filter(
-        (x) =>
-          !(
-            String(x.productId) === String(productId) &&
-            String(x.variant || "") === String(variant || "")
-          )
+        (x) => !(String(x.productId) === String(productId) && String(x.variant || "") === String(variant || ""))
       );
       saveCart(next);
       return next;
@@ -159,8 +114,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const buyNow = (product: any, variant = "", qty = 1) => {
-    const one: CartItem = {
-      productId: String(product?._id || product?.id || ""),
+    const one = {
+      productId: product?._id,
       title: product?.title,
       price: product?.price,
       image: product?.images?.[0] || product?.image || "https://via.placeholder.com/300",
@@ -177,27 +132,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     safeRemove(BUY_KEY);
   };
 
-  const cartCount = useMemo(
-    () => items.reduce((s, x) => s + Number(x.qty || 0), 0),
-    [items]
-  );
+  const cartCount = useMemo(() => items.reduce((s, x) => s + (x.qty || 0), 0), [items]);
 
-  const value: CartContextValue = {
-    items,
-    add,
-    inc,
-    dec,
-    remove,
-    clear,
-    cartCount,
-    buyNow,
-    checkoutItem,
-    clearBuyNow,
-  };
+  const value = { items, add, inc, dec, remove, clear, cartCount, buyNow, checkoutItem, clearBuyNow };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
+// ✅ IMPORTANT FIX: provider না থাকলেও crash হবে না
 export function useCart() {
-  return useContext(CartContext);
+  const ctx = useContext(CartContext);
+
+  if (ctx) return ctx;
+
+  // fallback no-op (এটা crash বন্ধ করবে)
+  return {
+    items: [],
+    cartCount: 0,
+    add: () => {},
+    inc: () => {},
+    dec: () => {},
+    remove: () => {},
+    clear: () => {},
+    buyNow: () => {},
+    checkoutItem: null,
+    clearBuyNow: () => {},
+  };
 }
