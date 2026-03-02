@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -19,7 +18,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
       <AnimatePresence mode="wait">
         <motion.div
-          // ❌ key={pathname} বাদ
+          key={pathname}
           initial={{ opacity: 0, y: -18 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
