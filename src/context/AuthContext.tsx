@@ -11,9 +11,16 @@ type AuthContextValue = {
   loading: boolean;
 
   login: (phone: string, password: string) => Promise<{ ok: boolean; message?: string }>;
-  logout: () => void;
 
-  // দরকার হলে register add করবে পরে
+  // ✅ REGISTER যোগ করা হলো (Register page crash বন্ধ হবে)
+  register: (payload: {
+    name: string;
+    phone: string;
+    password: string;
+    gender?: string;
+  }) => Promise<{ ok: boolean; message?: string }>;
+
+  logout: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -44,7 +51,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // App load এ token থাকলে user আনতে পারো (তোমার backend route থাকলে)
   useEffect(() => {
     let alive = true;
 
@@ -58,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // যদি তোমার backend এ profile endpoint থাকে:
+        // যদি তোমার backend এ /api/auth/me থাকে, চাইলে enable করো:
         // const me = await api.getAuth("/api/auth/me", t);
         // if (alive && me?.ok) setUser(me.user || null);
 
@@ -76,8 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (phone: string, password: string) => {
-    // ⚠️ এখানে endpoint তোমার backend অনুযায়ী লাগবে।
-    // বেশিরভাগ ক্ষেত্রে এটা থাকে: /api/auth/login
     const res = await api.post("/api/auth/login", { phone, password });
 
     if (res?.ok && res?.token) {
@@ -90,6 +94,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { ok: false, message: res?.message || "Login failed" };
   };
 
+  // ✅ register ফাংশন (Register page এ t is not a function বন্ধ হবে)
+  const register = async (payload: { name: string; phone: string; password: string; gender?: string }) => {
+    const res = await api.post("/api/auth/register", payload);
+
+    // অনেক backend register এর পর token দেয়, থাকলে save করবো
+    if (res?.ok && res?.token) {
+      safeSetLS("token", String(res.token));
+      setToken(String(res.token));
+      setUser(res.user || null);
+    }
+
+    return { ok: !!res?.ok, message: res?.message || (res?.ok ? "Registered" : "Register failed") };
+  };
+
   const logout = () => {
     safeRemoveLS("token");
     setToken("");
@@ -97,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, logout }),
+    () => ({ user, token, loading, login, register, logout }),
     [user, token, loading]
   );
 
@@ -106,15 +124,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    // Provider missing হলে crash না করে পরিষ্কার error দিবে
-    return {
-      user: null,
-      token: "",
-      loading: false,
-      login: async () => ({ ok: false, message: "AuthProvider missing" }),
-      logout: () => {},
-    };
-  }
-  return ctx;
+  if (ctx) return ctx;
+
+  // Provider missing হলেও crash করবে না
+  return {
+    user: null,
+    token: "",
+    loading: false,
+    login: async () => ({ ok: false, message: "AuthProvider missing" }),
+    register: async () => ({ ok: false, message: "AuthProvider missing" }),
+    logout: () => {},
+  };
 }
