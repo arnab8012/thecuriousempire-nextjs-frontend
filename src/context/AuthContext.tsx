@@ -12,7 +12,6 @@ type AuthContextValue = {
 
   login: (phone: string, password: string) => Promise<{ ok: boolean; message?: string }>;
 
-  // ✅ REGISTER যোগ করা হলো (Register page crash বন্ধ হবে)
   register: (payload: {
     name: string;
     phone: string;
@@ -21,9 +20,15 @@ type AuthContextValue = {
   }) => Promise<{ ok: boolean; message?: string }>;
 
   logout: () => void;
+
+  // ✅ optional: force reload user from server
+  refreshMe: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+const TOKEN_KEY = "token";
+const USER_KEY = "auth_user_v1";
 
 function safeGetLS(key: string) {
   if (typeof window === "undefined") return "";
@@ -46,30 +51,74 @@ function safeRemoveLS(key: string) {
   } catch {}
 }
 
+function safeGetUser(): User | null {
+  try {
+    const raw = safeGetLS(USER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function safeSetUser(u: any) {
+  try {
+    safeSetLS(USER_KEY, JSON.stringify(u ?? null));
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string>(() => safeGetLS("token"));
-  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string>(() => safeGetLS(TOKEN_KEY));
+  const [user, setUser] = useState<User | null>(() => safeGetUser());
   const [loading, setLoading] = useState<boolean>(true);
+
+  // ✅ server থেকে user sync (endpoint থাকলে)
+  const refreshMe = async () => {
+    const t = safeGetLS(TOKEN_KEY);
+    if (!t) {
+      setUser(null);
+      setToken("");
+      safeRemoveLS(USER_KEY);
+      return;
+    }
+
+    // 🔥 এখানে তোমার backend এ যেটা আছে সেটা দাও
+    // সাধারণত থাকে: /api/auth/me  অথবা /api/users/me
+    // যদি তোমার backend এ এটা না থাকে, তাহলে এই try ব্লক fail হবে—কিন্তু login state নষ্ট করবে না।
+    try {
+      const me = await api.getAuth("/api/auth/me", t);
+      if (me?.ok) {
+        setUser(me.user || me.data?.user || null);
+        safeSetUser(me.user || me.data?.user || null);
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     let alive = true;
 
     (async () => {
       try {
-        const t = safeGetLS("token");
+        const t = safeGetLS(TOKEN_KEY);
+
         if (!t) {
           if (!alive) return;
           setUser(null);
           setToken("");
+          safeRemoveLS(USER_KEY);
           return;
         }
 
-        // যদি তোমার backend এ /api/auth/me থাকে, চাইলে enable করো:
-        // const me = await api.getAuth("/api/auth/me", t);
-        // if (alive && me?.ok) setUser(me.user || null);
-
         if (!alive) return;
+
+        // ✅ token + user state restore (refresh এ logout হবে না)
         setToken(t);
+        const u = safeGetUser();
+        if (u) setUser(u);
+
+        // ✅ background sync (endpoint থাকলে)
+        await refreshMe();
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -79,43 +128,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (phone: string, password: string) => {
     const res = await api.post("/api/auth/login", { phone, password });
 
     if (res?.ok && res?.token) {
-      safeSetLS("token", String(res.token));
-      setToken(String(res.token));
-      setUser(res.user || null);
+      const t = String(res.token);
+
+      safeSetLS(TOKEN_KEY, t);
+      setToken(t);
+
+      const u = res.user || res.data?.user || null;
+      setUser(u);
+      safeSetUser(u);
+
       return { ok: true };
     }
 
     return { ok: false, message: res?.message || "Login failed" };
   };
 
-  // ✅ register ফাংশন (Register page এ t is not a function বন্ধ হবে)
   const register = async (payload: { name: string; phone: string; password: string; gender?: string }) => {
     const res = await api.post("/api/auth/register", payload);
 
-    // অনেক backend register এর পর token দেয়, থাকলে save করবো
+    // register এর পরে token দিলে persist করবো
     if (res?.ok && res?.token) {
-      safeSetLS("token", String(res.token));
-      setToken(String(res.token));
-      setUser(res.user || null);
+      const t = String(res.token);
+
+      safeSetLS(TOKEN_KEY, t);
+      setToken(t);
+
+      const u = res.user || res.data?.user || null;
+      setUser(u);
+      safeSetUser(u);
     }
 
     return { ok: !!res?.ok, message: res?.message || (res?.ok ? "Registered" : "Register failed") };
   };
 
   const logout = () => {
-    safeRemoveLS("token");
+    safeRemoveLS(TOKEN_KEY);
+    safeRemoveLS(USER_KEY);
     setToken("");
     setUser(null);
   };
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, register, logout }),
+    () => ({ user, token, loading, login, register, logout, refreshMe }),
     [user, token, loading]
   );
 
@@ -124,15 +185,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (ctx) return ctx;
 
-  // Provider missing হলেও crash করবে না
-  return {
-    user: null,
-    token: "",
-    loading: false,
-    login: async () => ({ ok: false, message: "AuthProvider missing" }),
-    register: async () => ({ ok: false, message: "AuthProvider missing" }),
-    logout: () => {},
-  };
+  // Provider missing হলে crash না করে fallback দিবে (কিন্তু app broken হবে না)
+  if (!ctx) {
+    return {
+      user: null,
+      token: "",
+      loading: false,
+      login: async () => ({ ok: false, message: "AuthProvider missing" }),
+      register: async () => ({ ok: false, message: "AuthProvider missing" }),
+      logout: () => {},
+      refreshMe: async () => {},
+    };
+  }
+
+  return ctx;
 }
