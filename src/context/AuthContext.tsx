@@ -1,207 +1,209 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api } from "../api/api";
-import { useCart } from "./CartContext";
-import { useFavorites } from "./FavoritesContext";
+import React, { createContext, useContext, useMemo, useState } from "react";
 
-type UserType = any;
-
-type AuthContextValue = {
-  user: UserType | null;
-  booting: boolean;
-  login: (phone: string, password: string) => Promise<any>;
-  register: (payload: { fullName: string; phone: string; password: string; gender?: string }) => Promise<any>;
-  logout: () => void;
-  refreshMe: () => Promise<any>;
-  updateMe: (payload: any) => Promise<any>;
-  resetPassword: (phone: string, fullName: string, newPassword: string) => Promise<any>;
+type CartItem = {
+  productId: string;
+  title?: string;
+  image?: string;
+  variant?: string;
+  qty?: number;
+  price?: number;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+type CartContextValue = {
+  items: CartItem[];
+  add: (item: CartItem) => void;
+  inc: (productId: any, variant?: string) => void;
+  dec: (productId: any, variant?: string) => void;
+  remove: (productId: any, variant?: string) => void;
+  clear: () => void;
+  cartCount: number;
 
-type CartContextType = { useUserCart?: (uid: string) => void };
-type FavoritesContextType = { useUserFav?: (uid: string) => void };
+  buyNow: (product: any, variant?: string, qty?: number) => void;
+  checkoutItem: any;
+  clearBuyNow: () => void;
+};
 
-function getUid(u: any) {
-  return u?._id || u?.id || u?.phone || u?.email || "";
+// ✅ Context default undefined (safe)
+const CartContext = createContext<CartContextValue | undefined>(undefined);
+
+const CART_KEY = "cart_items_v1";
+const BUY_KEY = "buy_now_item_v1";
+
+function safeGet(key: string) {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSet(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {}
+}
+function safeRemove(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {}
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const cart = (useCart() as unknown as CartContextType) || null;
-  const fav = (useFavorites() as unknown as FavoritesContextType) || null;
+function loadCart(): CartItem[] {
+  try {
+    const raw = safeGet(CART_KEY) || "[]";
+    const j = JSON.parse(raw);
+    return Array.isArray(j) ? j : [];
+  } catch {
+    return [];
+  }
+}
 
-  const [user, setUser] = useState<UserType | null>(null);
-  const [booting, setBooting] = useState(true);
+function saveCart(items: CartItem[]) {
+  safeSet(CART_KEY, JSON.stringify(items));
+}
 
-  const safeLocalStorage = () => (typeof window !== "undefined" ? window.localStorage : null);
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [items, setItems] = useState<CartItem[]>(() => loadCart());
 
-  // ===== BOOT: token থাকলে /me =====
-  useEffect(() => {
-    let alive = true;
+  const [checkoutItem, setCheckoutItem] = useState<any>(() => {
+    try {
+      const raw = safeGet(BUY_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
-    (async () => {
-      try {
-        const ls = safeLocalStorage();
-        const t = ls?.getItem("token") || "";
+  const add = (item: CartItem) => {
+    setItems((prev) => {
+      const i = prev.findIndex(
+        (x) =>
+          x.productId === item.productId &&
+          String(x.variant || "") === String(item.variant || "")
+      );
 
-        if (!t) {
-          if (alive) {
-            setUser(null);
-            setBooting(false);
-            cart?.useUserCart?.("");
-            fav?.useUserFav?.("");
-          }
-          return;
-        }
-
-        const r = await api.getAuth("/api/auth/me", t);
-        if (!alive) return;
-
-        if (r?.ok) {
-          const u = r?.user || null;
-          setUser(u);
-
-          const uid = getUid(u);
-          cart?.useUserCart?.(uid);
-          fav?.useUserFav?.(uid);
-        } else {
-          ls?.removeItem("token");
-          setUser(null);
-          cart?.useUserCart?.("");
-          fav?.useUserFav?.("");
-        }
-      } catch {
-        if (alive) {
-          const ls = safeLocalStorage();
-          ls?.removeItem("token");
-          setUser(null);
-          cart?.useUserCart?.("");
-          fav?.useUserFav?.("");
-        }
-      } finally {
-        if (alive) setBooting(false);
+      let next: CartItem[];
+      if (i >= 0) {
+        next = prev.map((x, idx) =>
+          idx === i
+            ? { ...x, qty: Number(x.qty || 0) + Number(item.qty || 0) }
+            : x
+        );
+      } else {
+        next = [...prev, { ...item, qty: Number(item.qty || 1) }];
       }
-    })();
 
-    return () => {
-      alive = false;
+      saveCart(next);
+      return next;
+    });
+  };
+
+  const inc = (productId: any, variant = "") => {
+    setItems((prev) => {
+      const next = prev.map((x) => {
+        const same =
+          String(x.productId) === String(productId) &&
+          String(x.variant || "") === String(variant || "");
+        return same ? { ...x, qty: Number(x.qty || 0) + 1 } : x;
+      });
+      saveCart(next);
+      return next;
+    });
+  };
+
+  const dec = (productId: any, variant = "") => {
+    setItems((prev) => {
+      const next = prev.map((x) => {
+        const same =
+          String(x.productId) === String(productId) &&
+          String(x.variant || "") === String(variant || "");
+        return same ? { ...x, qty: Math.max(1, Number(x.qty || 0) - 1) } : x;
+      });
+      saveCart(next);
+      return next;
+    });
+  };
+
+  const remove = (productId: any, variant = "") => {
+    setItems((prev) => {
+      const next = prev.filter(
+        (x) =>
+          !(
+            String(x.productId) === String(productId) &&
+            String(x.variant || "") === String(variant || "")
+          )
+      );
+      saveCart(next);
+      return next;
+    });
+  };
+
+  const clear = () => {
+    setItems([]);
+    safeRemove(CART_KEY);
+  };
+
+  const buyNow = (product: any, variant = "", qty = 1) => {
+    const one = {
+      productId: String(product?._id || product?.id || ""),
+      title: product?.title,
+      price: product?.price,
+      image: product?.images?.[0] || product?.image || "https://via.placeholder.com/300",
+      variant,
+      qty,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // ===== LOGIN =====
-  const login = async (phone: string, password: string) => {
-    const r = await api.post("/api/auth/login", { phone, password });
-    if (!r?.ok) return r;
-
-    const ls = safeLocalStorage();
-    if (r?.token) ls?.setItem("token", r.token); // ✅ safe
-    else ls?.removeItem("token");
-
-    const token = r?.token || (ls?.getItem("token") || "");
-
-    // ✅ DB থেকে fresh user
-    const me = token ? await api.getAuth("/api/auth/me", token) : null;
-    const u = me?.ok ? me.user : r.user || null;
-
-    setUser(u);
-
-    const uid = getUid(u) || phone;
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
-
-    setBooting(false);
-    return { ok: true, user: u };
+    setCheckoutItem(one);
+    safeSet(BUY_KEY, JSON.stringify(one));
   };
 
-  // ===== REGISTER =====
-  const register = async (payload: { fullName: string; phone: string; password: string; gender?: string }) => {
-    const { fullName, phone, password, gender } = payload;
-    const r = await api.post("/api/auth/register", { fullName, phone, password, gender });
-    if (!r?.ok) return r;
-
-    const ls = safeLocalStorage();
-    if (r?.token) ls?.setItem("token", r.token); // ✅ safe
-
-    const u = r.user || null;
-    setUser(u);
-
-    const uid = getUid(u) || phone;
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
-
-    setBooting(false);
-    return { ok: true, user: u };
+  const clearBuyNow = () => {
+    setCheckoutItem(null);
+    safeRemove(BUY_KEY);
   };
 
-  const refreshMe = async () => {
-    const ls = safeLocalStorage();
-    const t = ls?.getItem("token") || "";
-    if (!t) return { ok: false, message: "No token" };
-
-    const r = await api.getAuth("/api/auth/me", t);
-    if (!r?.ok) return r;
-
-    const u = r.user || null;
-    setUser(u);
-
-    const uid = getUid(u);
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
-
-    return { ok: true, user: u };
-  };
-
-  const updateMe = async (payload: any) => {
-    const ls = safeLocalStorage();
-    const t = ls?.getItem("token") || "";
-    if (!t) return { ok: false, message: "No token" };
-
-    const r = await api.putAuth("/api/auth/me", t, payload);
-    if (!r?.ok) return r;
-
-    const u = r.user || null;
-    setUser(u);
-
-    const uid = getUid(u);
-    cart?.useUserCart?.(uid);
-    fav?.useUserFav?.(uid);
-
-    return { ok: true, user: u };
-  };
-
-  const resetPassword = async (phone: string, fullName: string, newPassword: string) => {
-    return api.post("/api/auth/reset-password", { phone, fullName, newPassword });
-  };
-
-  const logout = () => {
-    const ls = safeLocalStorage();
-    ls?.removeItem("token");
-    setUser(null);
-    setBooting(false);
-
-    cart?.useUserCart?.("");
-    fav?.useUserFav?.("");
-  };
-
-  const value: AuthContextValue = useMemo(
-    () => ({
-      user,
-      booting,
-      login,
-      register,
-      logout,
-      refreshMe,
-      updateMe,
-      resetPassword,
-    }),
-    [user, booting]
+  const cartCount = useMemo(
+    () => items.reduce((s, x) => s + Number(x.qty || 0), 0),
+    [items]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const value: CartContextValue = {
+    items,
+    add,
+    inc,
+    dec,
+    remove,
+    clear,
+    cartCount,
+    buyNow,
+    checkoutItem,
+    clearBuyNow,
+  };
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
-export function useAuth() {
-  return useContext(AuthContext) || ({} as AuthContextValue);
+// ✅ IMPORTANT FIX: Provider না থাকলেও crash করবে না
+export function useCart(): CartContextValue {
+  const ctx = useContext(CartContext);
+
+  if (ctx) return ctx;
+
+  // fallback (NO CRASH)
+  return {
+    items: [],
+    add: () => {},
+    inc: () => {},
+    dec: () => {},
+    remove: () => {},
+    clear: () => {},
+    cartCount: 0,
+    buyNow: () => {},
+    checkoutItem: null,
+    clearBuyNow: () => {},
+  };
 }
