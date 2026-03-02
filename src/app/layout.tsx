@@ -1,4 +1,3 @@
-// src/app/layout.tsx
 import "./globals.css";
 import Providers from "./providers";
 import LayoutShell from "@/components/LayoutShell";
@@ -12,12 +11,6 @@ export const metadata: Metadata = {
   },
   description:
     "Premium Shopping Experience — Unique products delivered with quality & care.",
-  keywords: [
-    "The Curious Empire",
-    "Online Shopping Bangladesh",
-    "Premium Products",
-    "Ecommerce BD",
-  ],
   metadataBase: new URL("https://thecuriousempire.com"),
 };
 
