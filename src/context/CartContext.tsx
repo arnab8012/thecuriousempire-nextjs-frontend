@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 const CartContext = createContext<any>(null);
 
@@ -42,22 +42,23 @@ function saveCart(items: any[]) {
   safeSet(CART_KEY, JSON.stringify(items));
 }
 
+function loadBuyNow() {
+  try {
+    const raw = safeGet(BUY_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<any[]>(() => loadCart());
+  const [checkoutItem, setCheckoutItem] = useState<any>(() => loadBuyNow());
 
-  const [checkoutItem, setCheckoutItem] = useState<any>(() => {
-    try {
-      const raw = safeGet(BUY_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const add = (item: any) => {
+  const add = useCallback((item: any) => {
     setItems((prev) => {
       const i = prev.findIndex(
-        (x) => x.productId === item.productId && String(x.variant || "") === String(item.variant || "")
+        (x) => String(x.productId) === String(item.productId) && String(x.variant || "") === String(item.variant || "")
       );
 
       let next: any[];
@@ -72,9 +73,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       saveCart(next);
       return next;
     });
-  };
+  }, []);
 
-  const inc = (productId: any, variant = "") => {
+  const inc = useCallback((productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.map((x) => {
         const same =
@@ -84,9 +85,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       saveCart(next);
       return next;
     });
-  };
+  }, []);
 
-  const dec = (productId: any, variant = "") => {
+  const dec = useCallback((productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.map((x) => {
         const same =
@@ -96,9 +97,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       saveCart(next);
       return next;
     });
-  };
+  }, []);
 
-  const remove = (productId: any, variant = "") => {
+  const remove = useCallback((productId: any, variant = "") => {
     setItems((prev) => {
       const next = prev.filter(
         (x) => !(String(x.productId) === String(productId) && String(x.variant || "") === String(variant || ""))
@@ -106,35 +107,49 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       saveCart(next);
       return next;
     });
-  };
+  }, []);
 
-  const clear = () => {
+  const clear = useCallback(() => {
     setItems([]);
     safeRemove(CART_KEY);
-  };
+  }, []);
 
-  const buyNow = (product: any, variant = "", qty = 1) => {
+  const buyNow = useCallback((product: any, variant = "", qty = 1) => {
     const one = {
-      productId: product._id,
-      title: product.title,
-      price: product.price,
-      image: product.images?.[0] || product.image || "https://via.placeholder.com/300",
+      productId: product?._id ?? product?.id,
+      title: product?.title,
+      price: product?.price,
+      image: product?.images?.[0] || product?.image || "https://via.placeholder.com/300",
       variant,
       qty,
     };
 
     setCheckoutItem(one);
     safeSet(BUY_KEY, JSON.stringify(one));
-  };
+  }, []);
 
-  const clearBuyNow = () => {
+  const clearBuyNow = useCallback(() => {
     setCheckoutItem(null);
     safeRemove(BUY_KEY);
-  };
+  }, []);
 
-  const cartCount = useMemo(() => items.reduce((s, x) => s + (x.qty || 0), 0), [items]);
+  const cartCount = useMemo(() => items.reduce((s, x) => s + Number(x?.qty || 0), 0), [items]);
 
-  const value = { items, add, inc, dec, remove, clear, cartCount, buyNow, checkoutItem, clearBuyNow };
+  const value = useMemo(
+    () => ({
+      items,
+      add,
+      inc,
+      dec,
+      remove,
+      clear,
+      cartCount,
+      buyNow,
+      checkoutItem,
+      clearBuyNow,
+    }),
+    [items, add, inc, dec, remove, clear, cartCount, buyNow, checkoutItem, clearBuyNow]
+  );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
