@@ -28,6 +28,13 @@ function safeArray<T = any>(v: any): T[] {
 export default function ProductDetails({ id, product }: ProductDetailsProps) {
   const router = useRouter();
 
+  // ✅ Hydration mismatch (React #418) fix
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  if (!mounted) return null;
+
   // ✅ Hook must be called normally (no condition)
   const cart = useCart() as any;
   const add = cart?.add;
@@ -122,6 +129,11 @@ export default function ProductDetails({ id, product }: ProductDetailsProps) {
     const list = arr.length ? arr : alt;
     return list.length ? list : [FALLBACK_IMG];
   }, [p?.images, p?.image]);
+
+  // ✅ idx safe (ছবি কমে গেলে idx overflow হবে না)
+  useEffect(() => {
+    if (idx >= imgs.length) setIdx(0);
+  }, [imgs.length, idx]);
 
   // ✅ auto slide
   useEffect(() => {
