@@ -5,7 +5,7 @@ padding: 0;
 background: #07101d;
 }
 
-/* Dark card becomes full width /
+/* Dark card becomes full width */
 .footerCard{
 width: 100%;
 max-width: 100%;
@@ -13,7 +13,7 @@ margin: 0;
 border-radius: 0;
 background: radial-gradient(1200px 600px at 20% 20%, #0c2242 0%, #07101d 55%, #050a12 100%);
 color: #eaf1ff;
-padding: 8px 15px 45px; / ✅ bottom একটু বেশি দিলাম যাতে dev credit + BottomNav cover না হয় */
+padding: 8px 15px 45px; /* ✅ bottom একটু বেশি দিলাম যাতে dev credit + BottomNav cover না হয় */
 box-shadow: none;
 }
 
@@ -139,14 +139,14 @@ color: rgba(255,255,255,0.75);
 font-size: 14px;
 }
 
-/* ✅ Developer credit section /
+/* ✅ Developer credit section */
 .footerDev{
 display: flex;
 align-items: center;
-justify-content: flex-end; / ডান দিকে */
+justify-content: flex-end; /* ডান দিকে */
 gap: 10px;
-margin-top: 6px;
-padding-top: 6px;
+margin-top: 14px;
+padding-top: 14px;
 border-top: 1px dashed rgba(255,255,255,0.18);
 }
 
@@ -162,9 +162,6 @@ border: 2px solid rgba(255,255,255,0.35);
 font-size: 10px;
 color: rgba(255,255,255,0.75);
 text-align: right;
-line-height: 1.2;
-margin: 0;
-padding: 0;
 }
 
 /* Desktop */
