@@ -26,7 +26,6 @@ async function safeJson(res: Response) {
 }
 
 async function getHomeData() {
-  // Prefer server-only API_BASE if set; fallback to NEXT_PUBLIC_API_BASE
   const apiBase =
     process.env.API_BASE ||
     process.env.NEXT_PUBLIC_API_BASE ||
@@ -34,24 +33,18 @@ async function getHomeData() {
 
   const base = apiBase.replace(/\/$/, "");
 
-  const [cRes, bRes, pRes] = await Promise.all([
-    // ✅ Step 4: stronger cache for rarely-changing data
-    fetch(`${base}/api/categories`, { next: { revalidate: 3600 } }), // 1 hour
-    fetch(`${base}/api/banners`, { next: { revalidate: 3600 } }),    // 1 hour
+  // ✅ Only 1 request (best)
+  const res = await fetch(`${base}/api/home`, {
+    next: { revalidate: 120 }, // 2 min cache
+  });
 
-    // ✅ Step 4: moderate cache for products
-    fetch(`${base}/api/products`, { next: { revalidate: 120 } }),    // 2 min
-  ]);
-
-  const c = (await safeJson(cRes)) || {};
-  const b = (await safeJson(bRes)) || {};
-  const p = (await safeJson(pRes)) || {};
+  const data = (await safeJson(res)) || {};
 
   return {
     apiBase: base,
-    cats: Array.isArray((c as any)?.categories) ? (c as any).categories : [],
-    banners: Array.isArray((b as any)?.banners) ? (b as any).banners : [],
-    products: Array.isArray((p as any)?.products) ? (p as any).products : [],
+    cats: Array.isArray(data?.categories) ? data.categories : [],
+    banners: Array.isArray(data?.banners) ? data.banners : [],
+    productsByCategory: data?.productsByCategory || {},
   };
 }
 
