@@ -145,8 +145,8 @@
   align-items: center;
   justify-content: flex-end; /* ডান দিকে */
   gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 0px;
+  padding-top: 4px;
   border-top: 1px dashed rgba(255,255,255,0.18);
 }
 
