@@ -1,6 +1,6 @@
 import HomeClient from "@/screens/HomeClient";
 
-export const revalidate = 60;
+export const revalidate = 120;
 
 export const metadata = {
   title: "The Curious Empire | Premium Shopping Experience In Bangladesh",
@@ -26,7 +26,7 @@ async function safeJson(res: Response) {
 }
 
 async function getHomeData() {
-  // Prefer server-only API_BASE if set; fallback to NEXT_PUBLIC_API_BASE (you have both in Vercel)
+  // Prefer server-only API_BASE if set; fallback to NEXT_PUBLIC_API_BASE
   const apiBase =
     process.env.API_BASE ||
     process.env.NEXT_PUBLIC_API_BASE ||
@@ -35,9 +35,12 @@ async function getHomeData() {
   const base = apiBase.replace(/\/$/, "");
 
   const [cRes, bRes, pRes] = await Promise.all([
-    fetch(`${base}/api/categories`, { next: { revalidate: 300 } }),
-    fetch(`${base}/api/banners`, { next: { revalidate: 300 } }),
-    fetch(`${base}/api/products`, { next: { revalidate: 60 } }),
+    // ✅ Step 4: stronger cache for rarely-changing data
+    fetch(`${base}/api/categories`, { next: { revalidate: 3600 } }), // 1 hour
+    fetch(`${base}/api/banners`, { next: { revalidate: 3600 } }),    // 1 hour
+
+    // ✅ Step 4: moderate cache for products
+    fetch(`${base}/api/products`, { next: { revalidate: 120 } }),    // 2 min
   ]);
 
   const c = (await safeJson(cRes)) || {};
