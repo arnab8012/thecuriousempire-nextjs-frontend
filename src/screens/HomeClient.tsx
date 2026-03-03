@@ -8,14 +8,14 @@ import HomeCategories from "../components/HomeCategories";
 type Props = {
   cats?: any[];
   banners?: any[];
-  products?: any[];
+  productsByCategory?: Record<string, any[]>;
   apiBase?: string;
 };
 
 export default function HomeClient({
   cats = [],
   banners = [],
-  products = [],
+  productsByCategory = {},
   apiBase = "",
 }: Props) {
   const [slide, setSlide] = useState(0);
@@ -59,27 +59,7 @@ export default function HomeClient({
     return () => clearInterval(id);
   }, [bannerUrls.length]);
 
-  const byCat = useMemo(() => {
-    const map = new Map<string, any[]>();
-    for (const p of Array.isArray(products) ? products : []) {
-      const cid =
-        p?.category?._id ??
-        p?.category?.id ??
-        p?.categoryId ??
-        p?.category ??
-        null;
-
-      const key = cid ? String(cid) : "";
-      if (!key) continue;
-
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(p);
-    }
-    return map;
-  }, [products]);
-
-  const getCatId = (c: any) =>
-    String(c?._id ?? c?.id ?? c?.categoryId ?? c?.slug ?? "");
+  const getCatId = (c: any) => String(c?._id ?? c?.id ?? c?.categoryId ?? "");
 
   return (
     <div className="page-enter">
@@ -128,14 +108,21 @@ export default function HomeClient({
               const cid = getCatId(c);
               if (!cid) return null;
 
-              const items = byCat.get(cid) || [];
-              if (!items.length) return null;
+              // ✅ backend already returns 4 items per category
+              const items =
+                (productsByCategory && productsByCategory[cid]) || [];
+
+              if (!Array.isArray(items) || items.length === 0) return null;
 
               return (
                 <div key={cid} style={{ marginTop: 14 }}>
                   <div className="rowBetween" style={{ marginBottom: 10 }}>
                     <h3 style={{ margin: 0, fontWeight: 900 }}>{c?.name}</h3>
-                    <Link className="seeMore" to={`/shop?category=${c?.slug || cid}`}>
+
+                    <Link
+                      className="seeMore"
+                      to={`/shop?category=${c?.slug || cid}`}
+                    >
                       See More →
                     </Link>
                   </div>
