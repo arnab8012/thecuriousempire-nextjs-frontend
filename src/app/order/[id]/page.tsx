@@ -1,16 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/api/api";
 
 function prettyOrderStatus(s: string) {
   const st = String(s || "").toUpperCase();
-  if (st === "CANCELLED") return "Cancelled";
-  if (st === "DELIVERED") return "Delivered";
-  if (st === "PLACED") return "Waiting for Confirmation";
-  if (st === "CONFIRMED" || st === "IN_TRANSIT") return "Processing for Delivery";
+
+  if (st === "CANCELLED") return "❌ Order Cancelled";
+  if (st === "DELIVERED") return "✅ Order Delivered";
+  if (st === "PLACED") return "⏳ Waiting for Confirmation";
+  if (st === "CONFIRMED" || st === "IN_TRANSIT") return "🚚 Processing for Delivery";
+
   return st;
+}
+
+function statusTheme(s: string) {
+  const st = String(s || "").toUpperCase();
+
+  if (st === "CANCELLED")
+    return { bg: "#fff1f1", border: "#ffd6d6", text: "#c62828", badge: "#ffebee" };
+
+  if (st === "DELIVERED")
+    return { bg: "#f1fff3", border: "#c8f5d0", text: "#2e7d32", badge: "#e8f5e9" };
+
+  // PLACED / CONFIRMED / IN_TRANSIT / others
+  return { bg: "#fff8e1", border: "#ffe0b2", text: "#ef6c00", badge: "#fff3e0" };
 }
 
 export default function OrderDetailsPage() {
@@ -22,6 +37,8 @@ export default function OrderDetailsPage() {
   const [order, setOrder] = useState<any>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+
+  const theme = useMemo(() => statusTheme(order?.status), [order?.status]);
 
   useEffect(() => {
     if (!token) {
@@ -35,10 +52,8 @@ export default function OrderDetailsPage() {
         setLoading(true);
         setErr("");
 
-        // ✅ আপনার api helper (postAuth/putAuth এর মতো) থাকলে এটা কাজ করবে
         const r = await (api as any).getAuth?.(`/api/orders/${id}`, token);
 
-        // ✅ fallback: getAuth না থাকলে
         let data = r;
         if (!data) {
           const resp = await fetch(`/api/orders/${id}`, {
@@ -68,8 +83,17 @@ export default function OrderDetailsPage() {
   if (!order) return <div className="container">Order not found</div>;
 
   const ship = order.shipping || {};
-  const paidBy =
-    order.paymentMethod === "FULL_PAYMENT" ? "Full Payment" : "Cash on Delivery";
+  const paidBy = order.paymentMethod === "FULL_PAYMENT" ? "Full Payment" : "Cash on Delivery";
+
+  // ✅ ছোট subtitle (Daraz style-ish)
+  const subtitle =
+    String(order.status || "").toUpperCase() === "DELIVERED"
+      ? "Your package has been delivered."
+      : String(order.status || "").toUpperCase() === "CANCELLED"
+      ? "This order was cancelled."
+      : String(order.status || "").toUpperCase() === "PLACED"
+      ? "We will confirm your order soon."
+      : "Your order is being processed for delivery.";
 
   return (
     <div className="container">
@@ -81,10 +105,40 @@ export default function OrderDetailsPage() {
         <div />
       </div>
 
-      {/* ✅ Status box */}
-      <div className="box" style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>{prettyOrderStatus(order.status)}</h3>
-        <div className="muted" style={{ marginTop: 6 }}>
+      {/* ✅ Status box (beautiful) */}
+      <div
+        className="box"
+        style={{
+          marginBottom: 12,
+          background: theme.bg,
+          border: `1px solid ${theme.border}`,
+        }}
+      >
+        <div className="rowBetween" style={{ alignItems: "flex-start" }}>
+          <div>
+            <h3 style={{ margin: 0, color: theme.text }}>{prettyOrderStatus(order.status)}</h3>
+            <div className="muted" style={{ marginTop: 6 }}>
+              {subtitle}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "6px 10px",
+              borderRadius: 999,
+              background: theme.badge,
+              border: `1px solid ${theme.border}`,
+              color: theme.text,
+              fontWeight: 700,
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {String(order.status || "").toUpperCase()}
+          </div>
+        </div>
+
+        <div className="muted" style={{ marginTop: 10 }}>
           Placed on: {new Date(order.createdAt).toLocaleString()}
         </div>
       </div>
@@ -125,7 +179,9 @@ export default function OrderDetailsPage() {
                 <div>
                   <div style={{ fontWeight: 700 }}>{it.title}</div>
                   {it.variant ? <div className="muted">{it.variant}</div> : null}
-                  <div className="muted">৳ {it.price} × {it.qty}</div>
+                  <div className="muted">
+                    ৳ {it.price} × {it.qty}
+                  </div>
                 </div>
               </div>
 
