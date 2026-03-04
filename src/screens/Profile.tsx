@@ -8,6 +8,7 @@ import { useNavigate } from "@/utils/useNavigate";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/api";
 import useNoIndex from "../utils/useNoIndex";
+import { useRouter } from "next/navigation";
 
 const TABS = [
   { key: "PLACED", label: "Placed" },
@@ -34,6 +35,7 @@ export default function Profile() {
   useNoIndex("noindex, nofollow");
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const router = useRouter();
 
   // ✅ token stable রাখলাম (render এ বারবার বদলাবে না)
   const token = useMemo(() => localStorage.getItem("token"), []);
