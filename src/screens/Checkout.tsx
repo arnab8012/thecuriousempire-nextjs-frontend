@@ -350,13 +350,39 @@ export default function Checkout() {
     };
 
     const r = await api.postAuth("/api/orders", token, payload);
-    if (!r?.ok) return alert(r?.message || "Order failed");
+if (!r?.ok) return alert(r?.message || "Order failed");
 
+// ✅ FULL_PAYMENT হলে: demo payment flow (COD safe)
+if (paymentMethod === "FULL_PAYMENT") {
+  const orderId = r?.order?._id;
+  if (!orderId) return alert("Order id missing");
+
+  // 1) demo-create
+  const cr = await api.postAuth("/api/bkash/demo-create", token, { orderId });
+  if (!cr?.paymentID) return alert(cr?.message || "Demo create failed");
+
+  // 2) demo-execute
+  const ex = await api.postAuth("/api/bkash/demo-execute", token, { orderId });
+  if (ex?.statusCode === "0000") {
     if (buyMode) cart?.clearBuyNow?.();
     else cart?.clear?.();
 
-    alert("✅ Order placed!");
+    alert("✅ Demo Payment Success!");
     router.push("/profile");
+  } else {
+    alert(ex?.message || "Demo payment failed");
+  }
+
+  return; // ✅ খুব গুরুত্বপূর্ণ: COD অংশে যাবে না
+}
+
+// ✅ COD flow (আগের মতোই)
+if (buyMode) cart?.clearBuyNow?.();
+else cart?.clear?.();
+
+alert("✅ Order placed!");
+router.push("/profile");
+
   };
 
   // ✅ UI guard (only for UI)
