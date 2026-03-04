@@ -146,7 +146,12 @@ export default function Profile() {
           const orderId = o.orderNo || o._id;
 
           return (
-            <div key={o._id} className="box premiumCard orderCardPremium">
+            <div
+  key={o._id}
+  className="box premiumCard orderCardPremium"
+  style={{ cursor: "pointer" }}
+  onClick={() => router.push(`/order/${o._id}`)}
+>
               <div className="orderTopRowPremium">
                 <div className="orderId">
                   Order ID: <b>{orderId}</b>
