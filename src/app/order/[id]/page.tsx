@@ -97,13 +97,18 @@ export default function OrderDetailsPage() {
 
   return (
     <div className="container">
-      <div className="rowBetween" style={{ marginBottom: 10 }}>
-        <button className="btnGhost" type="button" onClick={() => router.back()}>
-          ← Back
-        </button>
-        <h2 style={{ margin: 0 }}>Order Details</h2>
-        <div />
-      </div>
+      <div style={{ marginBottom: 14, position: "relative", textAlign: "center" }}>
+  <button
+    className="btnGhost"
+    type="button"
+    onClick={() => router.back()}
+    style={{ position: "absolute", left: 0, top: 0 }}
+  >
+    ← Back
+  </button>
+
+  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Order Details</h2>
+</div>
 
       {/* ✅ Status box (beautiful) */}
       <div
