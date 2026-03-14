@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 };
 
 const META_PIXEL_ID = "1743053860413321";
+const GA_ID = "G-PBDK1ZQPKL";
 
 export default function RootLayout({
   children,
@@ -42,6 +43,20 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
         />
+
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+          strategy="afterInteractive"
+        />
+
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}');
+          `}
+        </Script>
 
         <Script
           id="meta-pixel-base"
