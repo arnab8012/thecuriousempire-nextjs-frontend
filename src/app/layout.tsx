@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   },
 };
 
-const META_PIXEL_ID = "1743053860413321";
+const META_PIXEL_ID = "1591140458767669";
 const GA_ID = "G-PBDK1ZQPKL";
 
 export default function RootLayout({
