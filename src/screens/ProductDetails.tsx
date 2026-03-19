@@ -25,6 +25,11 @@ function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
 
+function renderStars(n: number) {
+  const rating = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+  return "★".repeat(rating) + "☆".repeat(5 - rating);
+}
+
 export default function ProductDetails({ id, product }: ProductDetailsProps) {
   const router = useRouter();
 
@@ -41,6 +46,18 @@ export default function ProductDetails({ id, product }: ProductDetailsProps) {
   const [variant, setVariant] = useState("");
   const [qty, setQty] = useState(1);
   const [toast, setToast] = useState("");
+
+  const [reviews, setReviews] = useState<any[]>([]);
+const [reviewSummary, setReviewSummary] = useState<any>({
+  averageRating: 0,
+  reviewCount: 0,
+  breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+});
+const [reviewLoading, setReviewLoading] = useState(false);
+const [reviewErr, setReviewErr] = useState("");
+const [myRating, setMyRating] = useState(5);
+const [myComment, setMyComment] = useState("");
+const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -155,6 +172,38 @@ export default function ProductDetails({ id, product }: ProductDetailsProps) {
 
   const productId = String(p?._id ?? p?.id ?? id ?? "");
 
+const loadReviews = async (pid: string) => {
+  if (!pid) return;
+
+  try {
+    setReviewLoading(true);
+    setReviewErr("");
+
+    const r = await api.get(`/api/reviews/product/${pid}`);
+
+    if (r?.ok) {
+      setReviews(Array.isArray(r.reviews) ? r.reviews : []);
+      setReviewSummary(
+        r.summary || {
+          averageRating: 0,
+          reviewCount: 0,
+          breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+        }
+      );
+    } else {
+      setReviewErr(r?.message || "Failed to load reviews");
+    }
+  } catch {
+    setReviewErr("Failed to load reviews");
+  } finally {
+    setReviewLoading(false);
+  }
+};
+useEffect(() => {
+  if (productId) loadReviews(productId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [productId]);
+
   const cartItem = {
     productId,
     title: p?.title,
@@ -172,6 +221,49 @@ export default function ProductDetails({ id, product }: ProductDetailsProps) {
     }
     return true;
   };
+const submitReview = async () => {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+
+  if (!token) {
+    router.push(`/login?next=${encodeURIComponent(`/product/${productId}`)}`);
+    return;
+  }
+
+  if (!productId) {
+    showToast("Product missing");
+    return;
+  }
+
+  const rating = Number(myRating);
+  if (rating < 1 || rating > 5) {
+    showToast("Select valid rating");
+    return;
+  }
+
+  try {
+    setReviewSubmitting(true);
+
+    const res = await api.postAuth("/api/reviews", token, {
+      productId,
+      rating,
+      comment: myComment,
+    });
+
+    if (res?.ok) {
+      showToast("Review submitted");
+      setMyRating(5);
+      setMyComment("");
+      await loadReviews(productId);
+    } else {
+      showToast(res?.message || "Review submit failed");
+    }
+  } catch {
+    showToast("Review submit failed");
+  } finally {
+    setReviewSubmitting(false);
+  }
+};
 
   return (
     <div className="container">
@@ -403,6 +495,111 @@ export default function ProductDetails({ id, product }: ProductDetailsProps) {
             <h4>Description</h4>
             <p className="product-description muted">{p?.description || "No description yet."}</p>
           </div>
+<div className="box">
+  <h4 style={{ marginBottom: 10 }}>Write a Review</h4>
+
+  <div style={{ display: "grid", gap: 10 }}>
+    <select
+      className="input"
+      value={myRating}
+      onChange={(e) => setMyRating(Number(e.target.value))}
+    >
+      <option value={5}>5 Star</option>
+      <option value={4}>4 Star</option>
+      <option value={3}>3 Star</option>
+      <option value={2}>2 Star</option>
+      <option value={1}>1 Star</option>
+    </select>
+
+    <textarea
+      className="input"
+      rows={4}
+      placeholder="Write your review"
+      value={myComment}
+      onChange={(e) => setMyComment(e.target.value)}
+      style={{ resize: "vertical", paddingTop: 12 }}
+    />
+
+    <button
+      className="btnDarkFull"
+      type="button"
+      onClick={submitReview}
+      disabled={reviewSubmitting}
+    >
+      {reviewSubmitting ? "Submitting..." : "Submit Review"}
+    </button>
+  </div>
+</div>
+
+<div className="box">
+  <h4 style={{ marginBottom: 10 }}>Customer Reviews</h4>
+
+  <div style={{ marginBottom: 14 }}>
+    <div style={{ fontSize: 22, fontWeight: 900 }}>
+      {Number(reviewSummary?.averageRating || 0).toFixed(1)} / 5
+    </div>
+    <div style={{ color: "#f59e0b", fontSize: 18, fontWeight: 900 }}>
+      {renderStars(Number(reviewSummary?.averageRating || 0))}
+    </div>
+    <div className="muted">{Number(reviewSummary?.reviewCount || 0)} total reviews</div>
+  </div>
+
+  {reviewLoading ? <div className="muted">Loading reviews...</div> : null}
+  {reviewErr ? <div style={{ color: "#b91c1c", fontWeight: 700 }}>{reviewErr}</div> : null}
+
+  {!reviewLoading && !reviews.length ? (
+    <div className="muted">No reviews yet.</div>
+  ) : null}
+
+  <div style={{ display: "grid", gap: 12 }}>
+    {reviews.map((rv: any) => (
+      <div
+        key={rv?._id}
+        style={{
+          border: "1px solid #e9e9e9",
+          borderRadius: 14,
+          padding: 14,
+          background: "#fff",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ fontWeight: 900 }}>{rv?.name || "Customer"}</div>
+            <div style={{ color: "#f59e0b", fontWeight: 900 }}>
+              {renderStars(Number(rv?.rating || 0))}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            {rv?.isVerifiedPurchase ? (
+              <div
+                style={{
+                  display: "inline-block",
+                  background: "#ecfdf5",
+                  color: "#065f46",
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  marginBottom: 6,
+                }}
+              >
+                Verified Purchase
+              </div>
+            ) : null}
+            <div className="muted" style={{ fontSize: 12 }}>
+              {rv?.createdAt ? new Date(rv.createdAt).toLocaleDateString() : ""}
+            </div>
+          </div>
+        </div>
+
+        <p style={{ marginTop: 10, whiteSpace: "pre-line", lineHeight: 1.6 }}>
+          {rv?.comment || "No comment"}
+        </p>
+      </div>
+    ))}
+  </div>
+</div>
         </div>
       </div>
     </div>
