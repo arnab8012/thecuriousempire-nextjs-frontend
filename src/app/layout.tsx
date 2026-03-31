@@ -38,6 +38,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Google AdSense verification meta */}
+        <meta
+          name="google-adsense-account"
+          content="ca-pub-9206335982928538"
+        />
+
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }}
@@ -46,10 +52,9 @@ export default function RootLayout({
         {/* Google AdSense */}
         <Script
           id="google-adsense"
-          async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9206335982928538"
           crossOrigin="anonymous"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
         />
 
         {/* Google Analytics */}
