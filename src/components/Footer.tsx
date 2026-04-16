@@ -139,20 +139,20 @@ export default function Footer() {
         {/* ✅ Developer credit (এটা footerCard এর ভিতরে রাখতে হবে) */}
         <div className="footerDev">
           <img
-            src="/dev.p"
+            src="/dev.png"
             alt="Developer"
             className="footerDevImg"
             loading="lazy"
           />
           <span className="footerDevText">
-            {" "}
+            THIS WEBSITE DEVELOPED BY{" "}
             <a
-              href=""
+              href="https://www.facebook.com/tony5232"
               target="_blank"
               rel="noreferrer"
               className="devLink"
             >
-              <strong></strong>
+              <strong>ARNAB CHOWDHURY (TONY)</strong>
             </a>
           </span>
         </div>
